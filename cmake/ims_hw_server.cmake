@@ -1,0 +1,21 @@
+set(ims_hw_server_proto_files
+    ${proto_dir}/compensation.proto
+    ${proto_dir}/ims_system.proto
+    ${proto_dir}/image_table.proto
+    ${proto_dir}/filesystem_table.proto
+    ${proto_dir}/image_player.proto
+    ${proto_dir}/signal_path.proto
+    ${proto_dir}/app_version.proto
+    ${proto_dir}/tone_buffer.proto
+    ${proto_dir}/system_func.proto    
+)
+
+set(ims_hw_server_src_files
+    ${src_dir}/ims_hw_server_player.cc
+	${src_dir}/ims_hw_server_downloader.cc
+	${src_dir}/ims_hw_server_compensation.cc
+	${src_dir}/ims_hw_server_signal_path.cc
+	${src_dir}/ims_hw_server_system_func.cc
+	${src_dir}/ims_hw_server_tonebuffer.cc
+	${src_dir}/ims_hw_server.cc
+)

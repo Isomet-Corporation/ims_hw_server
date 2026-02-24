@@ -1,0 +1,70 @@
+//-----------------------------------------------------------------------------
+// Title      : iMS HW Protocol Buffer Definition
+// Project    : Isomet Modular Synthesiser System
+//------------------------------------------------------------------------------
+// File       : image_table.proto
+// Author     : Author: dave 
+// Company    : Isomet (UK) Ltd
+// Created    : 2016-12-14
+// Last update: Date: 2016-04-07 15:58:51 +0100 (Thu, 07 Apr 2016) 
+// Platform   :
+// Standard   : C++11
+// Revision   : Rev: 153 
+//------------------------------------------------------------------------------
+// Description:
+//------------------------------------------------------------------------------
+// Copyright (c) 2016 Isomet (UK) Ltd. All Rights Reserved.
+//------------------------------------------------------------------------------
+// Revisions  :
+// Description
+// 2016-12-06  1.0      dc      Created
+//
+//------------------------------------------------------------------------------
+
+syntax = "proto3";
+
+package ims_hw_server;
+
+import "ims_system.proto";
+
+//@defgroup grp_fstv FileSystem Table Viewer (filesystem_table_viewer)
+// \brief Reports the status of the Synthesiser FileSystem to application software
+//
+// An iMS Synthesiser has a built in Filesystem that can locally store ToneBuffers,
+// CompensationTables, DDS Scripts and User Data for recall either at power on or
+// during runtime.  This service informs the application what data is currently
+// residing on the filesystem.
+//@{
+service filesystem_table_viewer {
+  //@addtogroup grp_fstv
+  //@{
+  //;
+
+  // Server streaming grpc call that returns the detailed information about each entry in a filesystem
+  rpc fileentry_detail (ims_system) returns (stream filesystem_table_entry) {}
+  // Returns true if the Synthesiser contains a valid filesystem (with zero or more entries)
+  rpc is_valid (ims_system) returns (FilesystemValid) {}
+
+  //@}
+}
+
+// Details about one entry in the Synthesiser FileSystem
+message filesystem_table_entry {
+  // FileSystem entry type: No File = 0, Compensation Table = 1, ToneBuffer = 2, DDS Script = 3, User File = 15, Others reserved
+  int32  type      = 1;
+  // Starting address of the file in the filesystem
+  uint32 addr      = 2;
+  // Length in bytes of the file in the filesystem
+  uint32 length    = 3;
+  // Returns true if the file is executed at startup.  Only one file of each type can be marked default.
+  bool   isdefault = 4;
+  // Short (8 character) name describing the file entry
+  string name      = 5;
+}
+
+// Returns whether the Synthesiser filesystem is in a valid state
+message FilesystemValid {
+  // True if the Synthesiser filesystem is valid
+  bool valid = 1;
+}
+//@}

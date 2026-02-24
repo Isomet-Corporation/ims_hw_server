@@ -1,0 +1,291 @@
+//-----------------------------------------------------------------------------
+// Title      : iMS HW Protocol Buffer Definition
+// Project    : Isomet Modular Synthesiser System
+//------------------------------------------------------------------------------
+// File       : ims_system.proto
+// Author     : Author: dave 
+// Company    : Isomet (UK) Ltd
+// Created    : 2016-12-06
+// Last update: Date: 2016-04-07 15:58:51 +0100 (Thu, 07 Apr 2016) 
+// Platform   :
+// Standard   : GRPC Protobuf 3.0
+// Revision   : Rev: 153 
+//------------------------------------------------------------------------------
+// Description:
+//------------------------------------------------------------------------------
+// Copyright (c) 2016 Isomet (UK) Ltd. All Rights Reserved.
+//------------------------------------------------------------------------------
+// Revisions  :
+// Description
+// 2016-12-06  1.0      dc      Created
+//
+//------------------------------------------------------------------------------
+
+syntax = "proto3";
+
+package ims_hw_server;
+
+import "google/protobuf/empty.proto";
+import "image_table.proto";
+
+//@defgroup grp_imgdl Image Downloader (image_downloader)
+// \brief Mechanism for downloading an Image to the Hardware
+//
+// At the server end, a list of buffers is maintained, each containing a iMS::Image and a iMS::ImageDownload object.
+// Application software can create a new buffer, add Image Point data to
+// the buffer, download the buffer to hardware, and check the current status of any download
+//@{
+service image_downloader {
+  //@addtogroup grp_imgdl
+  //@{
+  //;
+
+  // Create a new image buffer and add to the buffer list at the server end
+  rpc create (image_header) returns (DownloadHandle) {}
+  // Adds ImagePoints to the new image buffer  Points must be added sequentially from first to last.  
+  rpc add (stream image_point) returns (google.protobuf.Empty) {}
+  // Set Image Format
+  rpc format (image_format) returns (google.protobuf.Empty) {}
+  // Download Image
+  rpc download(DownloadHandle) returns (DownloadStatus) {}
+  // Get Status
+  rpc dlstatus(DownloadHandle) returns (DownloadStatus) {}
+
+  //@}
+}
+
+// Initial data to compose the new Image buffer with
+message image_header
+{
+  // The default Internal Clock Rate, in kHz, to playbaak the image with, when using the Internal Clock
+  double clock_rate = 1;
+  // The default External Clock Divider to apply to the external clock when using the External Clock input
+  uint32 ext_divide = 2;
+  // A descriptive name to use to distinguish the Image from other Images
+  string name = 3;
+}
+
+// The Download Handle uniquely references the buffer on the server and must be passed between the ImageDownloader and ImagePlayback services to maintain context
+message DownloadHandle
+{
+  // Unique Buffer ID
+  uint32 id = 1;
+}
+
+// An individual image point to add to the Image buffer
+message image_point
+{
+  // Directs the Image Point data to the appropriate buffer on the server
+  DownloadHandle context = 1;
+
+  // Frequency Specification for Channel 1, in MHz
+  double freq_ch1 = 2;
+  // Amplitude Specification for Channel 1, in Percent
+  double ampl_ch1 = 3;
+  // Phase Specification for Channel 1, in Degrees
+  double phs_ch1 = 4;
+  // Frequency Specification for Channel 2, in MHz
+  double freq_ch2 = 5;
+  // Amplitude Specification for Channel 2, in Percent
+  double ampl_ch2 = 6;
+  // Phase Specification for Channel 2, in Degrees
+  double phs_ch2 = 7;
+  // Frequency Specification for Channel 3, in MHz
+  double freq_ch3 = 8;
+  // Amplitude Specification for Channel 3, in Percent
+  double ampl_ch3 = 9;
+  // Phase Specification for Channel 3, in Degrees
+  double phs_ch3 = 10;
+  // Frequency Specification for Channel 4, in MHz
+  double freq_ch4 = 11;
+  // Amplitude Specification for Channel 4, in Percent
+  double ampl_ch4 = 12;
+  // Phase Specification for Channel 4, in Degrees
+  double phs_ch4 = 13;
+
+  // Digital Synchronous data associated with Image Point
+  uint32 syncd = 14;
+  // First Analog Synchronous data associated with Image Point
+  double synca1 = 15;
+  // Second Analog Synchronous data associated with Image Point
+  double synca2 = 16;
+}
+
+// Describes the formatting of the image being downloaded to the iMS System
+message image_format
+{
+  // Directs the Image Format data to the appropriate buffer on the server
+  DownloadHandle context = 1;
+
+  // Set Number of Channels to program
+  uint32 Channels = 2;
+  // Frequency Parameter Precision
+  uint32 FreqBytes = 3;
+  // Amplitude Parameter Precision
+  uint32 AmplBytes = 4;
+  // Phase Parameter Precision
+  uint32 PhaseBytes = 5;
+  // Sync Data Parameter Precision
+  uint32 SyncBytes = 6;
+  // Enable Amplitude Programming for Image Data
+  bool EnableAmpl = 7;
+  // Enable Phase Programming for Image Data
+  bool EnablePhase = 8;
+  // Number of Sync Analogue channels
+  uint32 SyncAnlgChannels = 9;
+  // Enable Sync Digital Output
+  bool EnableSyncDig = 10;
+  // Channel Pair outputs use common data
+  bool CombineChannelPairs = 11;
+  // All RF Channel outputs use common data
+  bool CombineAllChannels = 12;
+}
+
+// Reports to the application on the current status of the download request
+message DownloadStatus
+{
+  // \enum DLStatus Download Status
+  enum DLStatus {
+    // No download in progress
+    IDLE = 0;
+    // Download currently in progress
+    DOWNLOADING = 1;
+    // Download finished successfully
+    DL_FINISHED = 2;
+    // Download finised with errors
+    DL_ERROR = 3;
+  }
+  // The current download status
+  DLStatus status = 1;
+  // Progress count through download - an integer number of image points downloaded
+  uint32 progress = 2;
+  // The UUID of the image being downloaded
+  bytes uuid = 3;
+}
+//@}
+//;
+
+//@defgroup grp_imgpl Image Player (image_player)
+// Service for controlling the playback of Images that have been downloaded to an iMS System
+//
+// The ImagePlayer service allows an application to instruct the iMS system to begin playback of a specified Image either immediately, or on arrival of the next trigger edge at the external trigger signal input.  In both cases, the playback is controlled by the PlayConfiguration message which defines various options for configuring the playback.
+// 
+// The ImagePlayer is also used to stop playback of an Image, either immediately, or after the final ImagePoint in the current repeat.  Unlike the play message, which requires a reference to an image through its image_table_entry, the stop message is applied to whichever Image is currently in progress.
+//
+// The current status of playback, including playing/stopped state and current point progression can be returned to the application through the plstatus rpc call.
+//@{
+service image_player {
+  //@addtogroup grp_imgpl
+  //@{
+  //;
+
+  // Start playback of an image specified in the index table
+  rpc play (PlayConfiguration) returns (PlaybackStatus) {}
+  // Start playback of an image specified in the index table after an external trigger is received
+  rpc play_on_ext_trigger (PlayConfiguration) returns (PlaybackStatus) {}
+  // Stop playback of an image at end of current image run
+  rpc stop (google.protobuf.Empty) returns (PlaybackStatus) {}
+  // Stops playback immediately
+  rpc stop_immediately (google.protobuf.Empty) returns (PlaybackStatus) {}
+  // Gets current playback status through image including point progress
+  rpc plstatus (google.protobuf.Empty) returns (PlaybackStatus) {}
+
+  //@}
+}
+
+// Options for configuring the parameters of the Image playback
+message PlayConfiguration
+{
+  // Directs the ImagePlayer to playback a specific Image in the Controller's Image Table
+  image_table_entry img = 1;
+
+  // \enum PointClock Internal or External Image Clocking Option
+  enum PointClock {
+    // Uses Internal Oscillator operating at programmable frequency
+    CLK_INTERNAL = 0;
+    // Uses External Clock signal applied to the External Clock input
+    CLK_EXTERNAL = 1;
+  }
+  // Play Image in Internal or External clocking mode
+  PointClock int_ext = 2;
+  // \enum ImageTrigger Action required to start next Image or Image Repeat after completion of final ImagePoint
+  enum ImageTrigger {
+    // Next Image or Image Repeat starts immediately
+    TRIG_CONTINUOUS = 0;
+    // Next Image or Repeat starts after a programmable delay
+    TRIG_POST_DELAY = 1;
+    // Next Image or Repeat starts after Edge detected on External Trigger signal input
+    TRIG_EXTERNAL = 2;
+    // Next Image or Repeat starts on software trigger from connected host
+    TRIG_HOST = 3;
+  }
+  // Method for triggering Next Image or Image Repeat
+  ImageTrigger trig = 3;
+  // \enum Repeats Sets the Repeat behaviour at the end of an Image
+  enum Repeats {
+    // No repeats.  If playing in a sequence, move to next Image in sequence, otherwise stop playback
+    RPTS_NONE = 0;
+    // Programmed repeats.  Repeat an Image a finite number of times before moving on or stopping.
+    RPTS_PROGRAM = 1;
+    // Repeat continuously.  Always repeats an image, must be stopped manually by software command.
+    RPTS_FOREVER = 2;
+  }
+  // Repeat Behaviour.
+  Repeats rpts = 4;
+  // In programmed repeats mode, the number of repeats (0 = no repeats, 1 = 1 repeat (2 playbacks), etc.
+  int32 n_rpts = 5;
+  // \enum Polarity Signal polarity of external signals.
+  enum Polarity {
+    // CLK / TRIG are active on the rising edge.
+    POL_NORMAL = 0;
+    // CLK / TRIG are active on the falling edge.
+    POL_INVERSE = 1;
+  }
+  // Sets the polarity of the external clock signal
+  Polarity clk_pol = 6;
+  // Sets the polarity of the external trigger signal
+  Polarity trig_pol = 7;
+  // When ImageTrigger is set to Post Delay mode, this field sets the amount of time, in seconds, to wait before starting the next Image or Image Repeat
+  double post_delay = 8;
+  // Sets the Clock Rate to use, in kHz, when playing an Image on the Internal Clock
+  double clock_rate = 9;
+  // Sets the Clock Divider ratio to assign to the external clock input when playing an Image on the External Clock
+  uint32 ext_divide = 10;
+
+  // If true, Image Playback is subject to beam steered phase adjustment by the Compensation Table.
+  bool phase_comp_enabled = 11;
+  // If true, Image Playback is subject to amplitude compensation by the Compensation Table
+  bool ampl_comp_enabled = 12;
+}
+
+// Reports the ImageIndex that uniquely references the Image stored in the iMS ImageTable
+message PlaybackHandle
+{
+  // The ImageIndex
+  uint32 id = 1;
+}
+
+// Current Status of an Image Playback
+message PlaybackStatus
+{
+  // \enum PBStatus Image Playback Status
+  enum PBStatus {
+    // No Image is Playing
+    PB_STOPPED = 0;
+    // Image is set to play; waiting for a trigger to start
+    PB_PENDING = 1;
+    // Image is currently playing
+    PB_PLAYING = 2;
+    // Image has completed playback
+    PB_FINISHED = 3;
+    // There was an error in playing an Image
+    PB_ERROR = 4;
+  }
+  // The Current Status
+  PBStatus status = 1;
+  // ImageIndex of the Image currently playing
+  PlaybackHandle id = 2;
+  // Progress through the Image, reported in number of points since the first point
+  uint32 progress = 3;
+}
+//@}

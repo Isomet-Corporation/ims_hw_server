@@ -1,0 +1,73 @@
+//-----------------------------------------------------------------------------
+// Title      : iMS HW Protocol Buffer Definition
+// Project    : Isomet Modular Synthesiser System
+//------------------------------------------------------------------------------
+// File       : system_func.proto
+// Author     : Author: dave 
+// Company    : Isomet (UK) Ltd
+// Created    : 2017-01-11
+// Last update: Date: 2016-04-07 15:58:51 +0100 (Thu, 07 Apr 2016) 
+// Platform   :
+// Standard   : Protobuf 3.0
+// Revision   : Rev: 153 
+//------------------------------------------------------------------------------
+// Description:
+//------------------------------------------------------------------------------
+// Copyright (c) 2017 Isomet (UK) Ltd. All Rights Reserved.
+//------------------------------------------------------------------------------
+// Revisions  :
+// Description
+// 2017-01-11  1.0      dc      Created
+//
+//------------------------------------------------------------------------------
+
+syntax = "proto3";
+
+package ims_hw_server;
+
+import "google/protobuf/empty.proto";
+
+//@defgroup grp_sysfunc System Functions (system_func)
+// \brief Controls system settings and clock generation
+//
+// This service controls the system functions of the iMS Controller/Synthesiser, including the in-built
+// clock generation capability
+//
+//@{
+service sys_func {
+  //@addtogroup grp_sysfunc
+  //@{
+  //;
+
+  // Configures and Enables the Internal Clock Generator for Clock Output Mode
+  rpc en_clock_gen (ClockGenerator) returns (google.protobuf.Empty) {}
+  // Disables the clock generator and stops clock output
+  rpc dis_clock_gen (google.protobuf.Empty) returns (google.protobuf.Empty) {}
+  //@}
+}
+
+// \brief Configuration for the Clock Generator service call.
+//
+// The RF output power is defined by a combination of the DDS output current and the amplitude control.
+// The RF amplitude is controller either through a digital level setting (choice of 2 wipers in rev A / rev B
+// iMS, or one-per-channel independent wipers), through an external amplitude modulation control signal
+// or is turned off.
+message ClockGenerator
+{
+  // Clock Frequency, in kHz
+  double ClockFreq = 1;
+  // Oscillator Phase, in Degrees (active edge relative to RF update)
+  double OscPhase = 2;
+  // Clock Duty Cycle, 0 - 100%
+  double DutyCycle = 3;
+  // Set True to have the clock output always active, False for active only during Image playback
+  bool AlwaysOn = 4;
+  // Set True to generate a trigger output during the first point of an image
+  bool GenerateTrigger = 5;
+  // Set True to invert the output clock polarity
+  bool ClockPolarity = 6;
+  // Set True to invert the output trigger polarity
+  bool TrigPolarity = 7;
+}
+
+//@}

@@ -39,3 +39,8 @@
 
 # debug information files
 *.dwo
+CMakeUserPresets.json
+build32/
+build64/
+dist/
+generated/

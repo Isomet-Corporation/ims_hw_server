@@ -1,0 +1,177 @@
+//-----------------------------------------------------------------------------
+// Title      : iMS HW Protocol Buffer Definition
+// Project    : Isomet Modular Synthesiser System
+//------------------------------------------------------------------------------
+// File       : ims_system.proto
+// Author     : Author: dave 
+// Company    : Isomet (UK) Ltd
+// Created    : 2016-12-06
+// Last update: Date: 2016-04-07 15:58:51 +0100 (Thu, 07 Apr 2016) 
+// Platform   :
+// Standard   : C++11
+// Revision   : Rev: 153 
+//------------------------------------------------------------------------------
+// Description:
+//------------------------------------------------------------------------------
+// Copyright (c) 2016 Isomet (UK) Ltd. All Rights Reserved.
+//------------------------------------------------------------------------------
+// Revisions  :
+// Description
+// 2016-12-06  1.0      dc      Created
+//
+//------------------------------------------------------------------------------
+
+syntax = "proto3";
+
+package ims_hw_server;
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+
+//@defgroup grp_hwlist Hardware List (hw_list)
+// \brief Master Service for detecting, connecting and disconnecting to iMS System Hardware.
+//
+// Allows a connected client to scan for any iMS systems attached to the server
+// and permits them to connect or disconnect. A server can only be connected to one system at a time.
+// The server maintains a reference to an iMS System which must be populated by calling the connect
+// rpc call before using any other services.
+//@{
+service hw_list {
+  //@addtogroup grp_hwlist
+  //@{
+  //;
+
+  // Scans a system for connected iMS devices (default connection settings)
+  rpc scan (google.protobuf.Empty) returns (stream ims_system) {}
+  // Scans a system for connected iMS devices
+  rpc scanfull (conn_settings) returns (stream ims_system) {}
+  // Connects to a iMS system
+  rpc connect (ims_system) returns (ConnectionStatus) {}
+  // Disconnects from a iMS system
+  rpc disconnect (ims_system) returns (ConnectionStatus) {}
+  // Resets all state in the server (including any open ims connections). iMS reference becomes null 
+  // and must be reconnected before using any other services.
+  rpc reset (google.protobuf.Empty) returns (google.protobuf.Empty) {}
+
+  //@}
+}
+
+// Defines which of the physical interfaces will be used to communicate with an iMS system (default: Ethernet/USB Enabled, Serial Disabled)
+message scan_include {
+  // A message that indicates which of the connection interfaces should be used to scan for iMS systems
+  
+  // Ethernet
+  bool CM_ENET = 1;
+  // USB (3.0 + FTDI)
+  bool CM_USB = 2;
+  // serial
+  bool CM_SERIAL = 3;
+}
+
+// This message configures the iMS library connection settings when performing a scan.
+message conn_settings {
+  // Scan connection settings 
+  scan_include include = 1;
+}
+
+// Contains details about the iMS System
+message ims_system {
+  // A string containing connection information used by the connect rpc call to identify the correct port
+  // on which to access the iMS System.  Typically also contains a serial number representation of the hardware.
+  string ConnPort = 1;
+
+  // Version Information about the firmware programmed into the iMS System
+  message fw_version {
+    // Firmware Major Version
+    int32 major = 1;
+    // Firmware Minor Version
+    int32 minor = 2;
+    // Firmware Revision Number
+    int32 revision = 3;
+    // Firmware Build Timestamp
+    google.protobuf.Timestamp build_time = 4;
+  }
+
+  // Embedded information about the iMS Controller
+  message controller {
+    // iMS Controller Model Number
+    string model = 1;
+    // iMS Controller Description String
+    string description = 2;
+    // iMS Controller Firmware Version
+    fw_version version = 3;
+    
+    // Capabilities struct for this model of Controller
+    message capabilities {
+      // The number of Synthesiser Interfaces on the Controller
+      int32 n_synth = 1;
+      // True if the Controller is capable of Fast Image Transfer: this means communications of > 10MB/s.
+      bool fast_transfer = 2;
+      // The maximum number of Image Points that can be stored in Image memory, accumulated across all Images
+      int32 max_img_size = 3;
+      // True if the Controller is capable of downloading Image data simultaneously with ongoing Image Playback.
+      // This boolean also implies whether the Controller is capable of storing multiple Images.
+      bool sim_playback = 4;
+      // The Maximum Internal Clock Rate supported by the Controller Image Playback
+      double max_img_rate = 5;
+      // Support for remote firmware upgrade
+      bool remote_upgrade = 6;
+    }
+    // Returns the Controller's Capabilities struct
+    capabilities cap = 4;
+  }
+  // Returns the Controller embedded information
+  controller Ctlr = 2;
+
+  // Embedded information about the iMS Synthesiser
+  message synthesiser {
+    // iMS Synthesiser Model Number
+    string model = 1;
+    // iMS Synthesiser Description String
+    string description = 2;
+    // iMS Synthesiser Firmware Version
+    fw_version version = 3;
+
+    // Capabilities struct for this model of Synthesiser
+    message capabilities {
+      // The lowest Frequency reproducible by this Synthesiser, in MHz
+      double lower_freq = 1;
+      // The highest Frequency reproducible by this Synthesiser, in MHz
+      double upper_freq = 2;
+      // The number of bits used to represent frequency internally => implies frequency resolution
+      int32 freq_bits = 3;
+      // The number of bits used to represent amplitude internally
+      int32 ampl_bits = 4;
+      // The number of bits used to represent phase internally
+      int32 phs_bits = 5;
+      // The bit-depth of the compensation Look-Up Table.  Number of LUT entries = (2 ^ lut_depth)
+      int32 lut_depth = 6;
+      // Number of bits used to represent amplitude in the LUT
+      int32 lut_ampl_bits = 7;
+      // Number of bits used to represent phase in the LUT
+      int32 lut_phs_bits = 8;
+      // Number of bits used to represent synchronous analog data in the LUT
+      int32 lut_synca_bits = 9;
+      // Number of bits used to represent synchronous digital data in the LUT
+      int32 lut_syncd_bits = 10;
+      // Number of RF Channels
+      int32 channels = 11;
+      // Support for Remote Firmware Upgrade
+      bool remote_upgrade = 12;
+      // Support for individual channel compensation
+      bool channel_comp = 13;
+    }
+    // Returns the Synthesiser's Capabilities struct
+    capabilities cap = 4;
+  }
+  // Returns the Synthesiser embedded information
+  synthesiser Synth = 3;
+}
+
+// Returns the current Connection Status of the server: connected (true) or disconnected (false)
+message ConnectionStatus {
+  // Returns true if a valid, usable connection exists between the server and iMS System Hardware
+  bool IsOpen = 1;
+}
+
+//@}

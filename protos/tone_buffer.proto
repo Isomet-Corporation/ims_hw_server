@@ -1,0 +1,173 @@
+//-----------------------------------------------------------------------------
+// Title      : iMS Compensation Table Protocol Buffer Definition
+// Project    : Isomet Modular Synthesiser System
+//------------------------------------------------------------------------------
+// File       : tone_buffer.proto
+// Author     : Author: dave 
+// Company    : Isomet (UK) Ltd
+// Created    : 2016-12-06
+// Last update: Date: 2016-04-07 15:58:51 +0100 (Thu, 07 Apr 2016) 
+// Platform   :
+// Standard   : GRPC Protobuf 3.0
+// Revision   : Rev: 153 
+//------------------------------------------------------------------------------
+// Description:
+//------------------------------------------------------------------------------
+// Copyright (c) 2016 Isomet (UK) Ltd. All Rights Reserved.
+//------------------------------------------------------------------------------
+// Revisions  :
+// Description
+// 2016-12-06  1.0      dc      Created
+//
+//------------------------------------------------------------------------------
+
+syntax = "proto3";
+
+package ims_hw_server;
+
+import "google/protobuf/empty.proto";
+import "image_player.proto";
+
+//@defgroup grp_tbuf Tone Buffer Downloader (tonebuffer_downloader)
+// \brief Mechanism for downloading a Tone Buffer to the Hardware
+//
+// At the server end, a list of buffers is maintained, each containing a iMS::ToneBuffer and a iMS::ToneBufferDownload object.
+// Application software can create a new buffer, add Tone Buffer entry data to
+// the buffer, download the buffer to hardware, and check the current status of any download
+//@{
+service tonebuffer_downloader {
+  //@addtogroup grp_tbuf
+  //@{
+  //;
+
+  // Create a new tone buffer at the server end
+  rpc create (tonebuffer_header) returns (DownloadHandle) {}
+  // Adds ToneBuffer Entries to the new tone buffer, starting from tonebuffer_header::first ending with tonebuffer_header::last
+  rpc add (stream tonebuffer_entry) returns (google.protobuf.Empty) {}
+  // Download Tone Buffer.  All entries between first and last must have been added before a download will proceed
+  rpc download(DownloadHandle) returns (DownloadStatus) {}
+  // Get Status
+  rpc dlstatus(DownloadHandle) returns (DownloadStatus) {}
+  // Store in FileSystem
+  rpc store(FileStoreSettings) returns (FileStoreStatus) {}
+
+  //@}
+}
+
+// Settings for initiating a Tone Buffer download
+message tonebuffer_header
+{
+  // The first index of the buffer to download (must be 0 - 255 and <= last)
+  uint32 first = 1;
+  // The last index of the buffer to download (must be 0 - 255 and >= first)
+  uint32 last = 2;
+}
+
+// Tone Buffer entry data.  Using tonebuffer_downloader::add, this message will assign entry data
+// to the next index in the tonebuffer, starting from first, then increment the index pointer until
+// last has been assigned
+message tonebuffer_entry
+{
+  // Directs the Entry data to the appropriate buffer on the server
+  DownloadHandle context = 1;
+
+  // Frequency of Channel 1, in MHz
+  double freq_ch1 = 2;
+  // Amplitude of Channel 1, in Percent
+  double ampl_ch1 = 3;
+  // Phase of Channel 1, in Degrees
+  double phs_ch1 = 4;
+  // Frequency of Channel 2, in MHz
+  double freq_ch2 = 5;
+  // Amplitude of Channel 2, in Percent
+  double ampl_ch2 = 6;
+  // Phase of Channel 2, in Degrees
+  double phs_ch2 = 7;
+  // Frequency of Channel 3, in MHz
+  double freq_ch3 = 8;
+  // Amplitude of Channel 3, in Percent
+  double ampl_ch3 = 9;
+  // Phase of Channel 3, in Degrees
+  double phs_ch3 = 10;
+  // Frequency of Channel 4, in MHz
+  double freq_ch4 = 11;
+  // Amplitude of Channel 4, in Percent
+  double ampl_ch4 = 12;
+  // Phase of Channel 4, in Degrees
+  double phs_ch4 = 13;
+}
+
+// Saves the Tone Buffer to the Synthesiser File Store, for later recall
+message FileStoreSettings
+{
+  // Directs the Entry data to the appropriate buffer on the server
+  DownloadHandle context = 1;
+
+  // A name to associate with the buffer on the filesystem (max 8 chars downloaded)
+  string name = 2;
+
+  // A flag to indicate whether the buffer will be recalled at power up
+  bool is_default = 3;
+}
+
+// Returns the status of the File Store request
+message FileStoreStatus
+{
+  // The location within the File System Table where the buffer was stored (or -1 on error, e.g. FS full)
+  int32 FileSystemIndex = 1;
+}
+
+//@}
+//;
+
+//@defgroup grp_tbufmgr Tone Buffer Manager (tonebuffer_manager)
+//\brief Controls the usage of a tone buffer that has been downloaded to the Synthesiser, or recalled from its filesystem
+//
+// A Tone Buffer playback can be started, stopped, or the index currently playing can be changed
+// using this service
+//@{
+service tonebuffer_manager {
+  //@addtogroup grp_tbufmgr
+  //@{
+  //;
+
+  // Start using the tone buffer
+  rpc start (tonebuffer_params) returns (google.protobuf.Empty) {}
+  // Change the selected tone buffer index
+  rpc select (tonebuffer_index) returns (google.protobuf.Empty) {}
+  // Stop using the tone buffer
+  rpc stop (google.protobuf.Empty) returns (google.protobuf.Empty) {}
+
+  //@}
+}
+
+// Parameters to Control the tone buffer playback
+message tonebuffer_params
+{
+  // If true, tones have amplitude compensation from the Compensation Look Up Table applied
+  bool amplitude_compensation_enabled = 1;
+  // If true, tones have phase compensation from the Compensation Look Up Table applied
+  bool phase_compensation_enabled = 2;
+  
+  // \enum tonebuffer_control_type Tone Buffer Selection Control Source
+  enum tonebuffer_control_type
+  {
+    // Tone Buffer Index selected by software command
+    HOST = 0;
+    // Tone Buffer Index selected by external input (first 16 entries)
+    EXTERNAL = 1;
+    // Tone buffer Index selected by external input (all 256 entries)
+    EXTERNAL_EXTENDED = 2;
+  }
+  // The ToneBuffer Selection Control Type
+  tonebuffer_control_type control = 3;
+}
+
+// Message for Selecting the Tone Buffer Index when controlled by software
+message tonebuffer_index
+{
+  // Tone Buffer Index to play ( 0 - 255 )
+  uint32 index = 1;
+}
+
+//@}

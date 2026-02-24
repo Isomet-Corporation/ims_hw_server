@@ -1,0 +1,62 @@
+//-----------------------------------------------------------------------------
+// Title      : iMS HW Protocol Buffer Definition
+// Project    : Isomet Modular Synthesiser System
+//------------------------------------------------------------------------------
+// File       : app_version.proto
+// Author     : Author: dave 
+// Company    : Isomet (UK) Ltd
+// Created    : 2017-01-30
+// Last update: Date: 2016-04-07 15:58:51 +0100 (Thu, 07 Apr 2016) 
+// Platform   :
+// Standard   : C++11
+// Revision   : Rev: 153 
+//------------------------------------------------------------------------------
+// Description:
+//------------------------------------------------------------------------------
+// Copyright (c) 2017 Isomet (UK) Ltd. All Rights Reserved.
+//------------------------------------------------------------------------------
+// Revisions  :
+// Description
+// 2017-01-30  1.0      dc      Created
+//
+//------------------------------------------------------------------------------
+
+syntax = "proto3";
+
+package ims_hw_server;
+
+import "google/protobuf/empty.proto";
+
+//@defgroup grp_ver App Version (app_version)
+// \brief Reports version data for the HW server app and the API on which it was built.
+//
+// The Hardware Server has its own version number independent of the SDK version
+// with which it is released.  It also references the C++ library, and for consistency
+// with application code, the SDK version of the server should match the SDK version
+// used by application client code.
+//@{
+service app_version {
+  //@addtogroup grp_ver
+  //@{
+  //;
+
+  // Returns version number for the app
+  rpc app (google.protobuf.Empty) returns (VersionInfo) {}
+  // Returns version number for the underlying library
+  rpc lib (google.protobuf.Empty) returns (VersionInfo) {}
+
+  //@}
+}
+
+// Generic Version Data in major.minor.patch format
+message VersionInfo {
+  // Major Version number.  Incremented for changes that may be incompatible with previous versions
+  int32 major = 1;
+  // Minor Version number.  Incremented with new feature additions / modifications.
+  int32 minor = 2;
+  // Patch Version number.  Incremented for bug fixes.
+  int32 patch = 3;
+  // Version Number as string for human readability
+  string as_string = 4;
+}
+//@}

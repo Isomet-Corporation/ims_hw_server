@@ -1,0 +1,66 @@
+//-----------------------------------------------------------------------------
+// Title      : iMS HW Protocol Buffer Definition
+// Project    : Isomet Modular Synthesiser System
+//------------------------------------------------------------------------------
+// File       : image_table.proto
+// Author     : Author: dave 
+// Company    : Isomet (UK) Ltd
+// Created    : 2016-12-14
+// Last update: Date: 2016-04-07 15:58:51 +0100 (Thu, 07 Apr 2016) 
+// Platform   :
+// Standard   : C++11
+// Revision   : Rev: 153 
+//------------------------------------------------------------------------------
+// Description:
+//------------------------------------------------------------------------------
+// Copyright (c) 2016 Isomet (UK) Ltd. All Rights Reserved.
+//------------------------------------------------------------------------------
+// Revisions  :
+// Description
+// 2016-12-06  1.0      dc      Created
+//
+//------------------------------------------------------------------------------
+
+syntax = "proto3";
+
+package ims_hw_server;
+
+import "ims_system.proto";
+
+//@defgroup grp_itv Image Table Viewer (image_table_viewer)
+// \brief Returns Information about Images Currently resident on the iMS Controller Hardware
+//
+// All iMS Controllers have built-in storage for iMS Images which can then be played back through a Synthesiser.  Some Controllers have storage for just a single Image while others can support many hundreds or even thousands of Images.  Information about the Images, including length, format, memory location and name, is kept in an Image Index table on the Controller.  This service allows the application to retrieve the contents of the Image Index table to application logic.
+//
+// It is implemented as a server side streaming service.  The application passes an ims_system object for which it wants to obtain the Image Index table, and the server responds with one image_table_entry per rpc call until all entries in the table have been read
+//@{
+service image_table_viewer {
+  //@addtogroup grp_itv
+  //@{
+  //;
+
+  // Returns streamed Image detail from the Image Index Table.
+  rpc image_detail (ims_system) returns (stream image_table_entry) {}
+
+  //@}
+}
+
+// An individual Image Index table entry, representing a single Image stored on the Controller
+message image_table_entry {
+  // Image Handle: a unique index within the Index Table
+  int32  handle = 1;
+  // Memory Address: the location of the first byte of the Image Data within Image Memory
+  uint32 addr   = 2;
+  // The number of Image Points in the Image
+  uint32 n_pts  = 3;
+  // The byte length of the Image in memory
+  uint32 size   = 4;
+  // Image Format describes how the byte data relates to Point data (Freq / Ampl / Phase per channel)
+  uint32 fmt    = 5;
+  // A 16-byte array representing the UUID of the Image
+  bytes  uuid   = 6;
+  // A short string representation of the Image to aid user identification of the Image purpose
+  string name   = 7;
+}
+//@}
+

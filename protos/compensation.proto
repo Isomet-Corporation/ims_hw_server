@@ -1,0 +1,89 @@
+//-----------------------------------------------------------------------------
+// Title      : iMS Compensation Table Protocol Buffer Definition
+// Project    : Isomet Modular Synthesiser System
+//------------------------------------------------------------------------------
+// File       : compensation.proto
+// Author     : Author: dave 
+// Company    : Isomet (UK) Ltd
+// Created    : 2016-12-06
+// Last update: Date: 2016-04-07 15:58:51 +0100 (Thu, 07 Apr 2016) 
+// Platform   :
+// Standard   : GRPC Protobuf 3.0
+// Revision   : Rev: 153 
+//------------------------------------------------------------------------------
+// Description:
+//------------------------------------------------------------------------------
+// Copyright (c) 2016 Isomet (UK) Ltd. All Rights Reserved.
+//------------------------------------------------------------------------------
+// Revisions  :
+// Description
+// 2016-12-06  1.0      dc      Created
+//
+//------------------------------------------------------------------------------
+
+syntax = "proto3";
+
+package ims_hw_server;
+
+import "google/protobuf/empty.proto";
+import "image_player.proto";
+
+//@defgroup grp_comp Compensation Table Downloader (compensation_downloader)
+// \brief Mechanism for downloading a Compensation Table to the Hardware
+//
+// At the server end, a list of buffers is maintained, each containing a iMS::CompensationTable and a iMS::CompensationTableDownload object.
+// Application software can create a new buffer, add Compensation Point data to
+// the buffer, download the buffer to hardware, and check the current status of any download
+//@{
+service compensation_downloader {
+  //@addtogroup grp_comp
+  //@{		
+  //;
+
+  // Create a new compensation table buffer and add to the buffer list at the server end
+  rpc create (compensation_header) returns (DownloadHandle) {}
+  // Adds CompensationPoints to a compensation table buffer.  Points must be added sequentially from first to last.  Once all points are added, no more data is accepted.
+  rpc add (stream compensation_point) returns (google.protobuf.Empty) {}
+  // Download Image
+  rpc download(compensation_download) returns (DownloadStatus) {}
+  // Get Status
+  rpc dlstatus(DownloadHandle) returns (DownloadStatus) {}
+
+  //@}
+}
+
+// Initial data to compose the new Compensation Table buffer with
+message compensation_header
+{
+  // Number of points in the table.  Can be found from the Synthesiser capabilities struct.
+  uint32 n_pts = 1;
+  // Set to true for X/Y deflector pairs.  Configures the phase steering of channels 3/4 relative to channels 1/2
+  bool isXY = 2;
+}
+
+// An individual compensation point to add to the compensation buffer
+message compensation_point
+{
+  // Directs the Compensation Point data to the appropriate buffer on the server
+  DownloadHandle context = 1;
+
+  // Amplitude compensation for this frequency index
+  double amplitude = 2;
+  // Phase compensation for this frequency index
+  double phase = 3;
+  // Digital Synchronous data for this frequency index
+  uint32 sync_dig = 4;
+  // Analogue Synchronous data for this frequency index
+  double sync_anlg = 5;
+}
+
+// Specifies which buffer to download, and to which channel (if relevant, else all)
+message compensation_download
+{
+  // Directs the Compensation Point data to the appropriate buffer on the server
+  DownloadHandle context = 1;
+  // Which channel to download to (1-4). If =0 or > 4, assume global LUT
+  uint32 channel = 2;
+}
+
+//@}

@@ -1,0 +1,381 @@
+//-----------------------------------------------------------------------------
+// Title      : iMS HW Protocol Buffer Definition
+// Project    : Isomet Modular Synthesiser System
+//------------------------------------------------------------------------------
+// File       : ims_system.proto
+// Author     : Author: dave 
+// Company    : Isomet (UK) Ltd
+// Created    : 2017-01-11
+// Last update: Date: 2016-04-07 15:58:51 +0100 (Thu, 07 Apr 2016) 
+// Platform   :
+// Standard   : Protobuf 3.0
+// Revision   : Rev: 153 
+//------------------------------------------------------------------------------
+// Description:
+//------------------------------------------------------------------------------
+// Copyright (c) 2017 Isomet (UK) Ltd. All Rights Reserved.
+//------------------------------------------------------------------------------
+// Revisions  :
+// Description
+// 2017-01-11  1.0      dc      Created
+//
+//------------------------------------------------------------------------------
+
+syntax = "proto3";
+
+package ims_hw_server;
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/wrappers.proto";
+
+//@defgroup grp_sigpath Signal Path (signal_path)
+// \brief Controls power settings and signal routing through the Synthesiser
+//
+// This service controls the routing of synthesiser Image Point data, as well as synchronous output
+// data (digital and analog).  It also switches on/off the outputs when connected to a compatible
+// RF amplifier, enables and configures the Calibration Tone and updates the power level of the RF
+// signal outputs
+//
+//@{
+service signal_path {
+  //@addtogroup grp_sigpath
+  //@{
+  //;
+
+  // Updates the power of the RF signal outputs: DDS current output drive, amplitude control source and level
+  rpc dds_power (PowerSettings) returns (google.protobuf.Empty) {}
+  // Updates the power of each RF channel output independently (only supported on rev C+ Synthesisers)
+  rpc channel_power (ChannelPowerSettings) returns (google.protobuf.Empty) {}
+  // Sets Channel Phase Tunings
+  rpc phase_tune (PhaseTunings) returns (google.protobuf.Empty) {}
+  // Master Enable switch on system RF signal chain: amplifier enable and channel enable
+  rpc rf_enable (MasterSwitch) returns (google.protobuf.Empty) {}
+  // Plays a Calibration Tone
+  rpc set_tone (CalibrationTone) returns (google.protobuf.Empty) {}
+  // Stops the Calibration Tone
+  rpc clear_tone (google.protobuf.Empty) returns (google.protobuf.Empty) {}
+  // Holds the current setting of Calibration Tone on a channel 
+  rpc hold_tone (ChannelFlags) returns (google.protobuf.Empty) {}
+  // Frees a channel to update with new Calibration Tone settings
+  rpc free_tone (ChannelFlags) returns (google.protobuf.Empty) {}
+  // Returns the current hold state fot he iMS System
+  rpc get_hold_state (google.protobuf.Empty) returns (ChannelFlags) {}
+  // Plays an Enhanced Tone
+  rpc set_enh_tone (EnhancedTone) returns (google.protobuf.Empty) {}
+  // In Enhanced Tone Mode, triggers up or down linear sweep from host software, or sets to external control
+  rpc control_enh_sweep (SweepControl) returns (google.protobuf.Empty) {}
+  // Stops the Enhanced Tone
+  rpc clear_enh_tone (google.protobuf.Empty) returns (google.protobuf.Empty) {}
+  // Assigns Sync Output for Analog and Digital Sync Sources
+  rpc set_sync_map (SyncMapping) returns (google.protobuf.Empty) {}
+  // Sets the delay parameters of the synchronous digital output data
+  rpc set_sync_delay (SyncDelay) returns (google.protobuf.Empty) {}
+  // Sets the X/Y Channel Offset Delay
+  rpc set_chan_delay (ChanDelay) returns (google.protobuf.Empty) {}
+  // Retrieves information about the Signal Path
+  rpc get_status (google.protobuf.Empty) returns (SignalPathStatus) {}
+  // Manual phase clear between channels
+  rpc clear_phase (google.protobuf.Empty) returns (google.protobuf.Empty) {}
+  // Auto phase clear on FAP update
+  rpc auto_clear (google.protobuf.BoolValue) returns (google.protobuf.Empty) {}
+  //@}
+}
+
+// \brief Power Settings for the dds_power service call.
+//
+// The RF output power is defined by a combination of the DDS output current and the amplitude control.
+// The RF amplitude is controller either through a digital level setting (choice of 2 wipers in rev A / rev B
+// iMS, or one-per-channel independent wipers), through an external amplitude modulation control signal
+// or is turned off.
+message PowerSettings
+{
+  // Current Setting for the DDS output, in Percent (0 - 100)
+  double DDSPower = 1;
+
+  // \enum AmplitudeControl Amplitude Control Source for the RF signal outputs
+  enum AmplitudeControl
+  {
+    // RF signal outputs driven off
+    OFF = 0;
+    // RF signal outputs modulated by external amplitude control signal
+    EXTERNAL = 1;
+    // RF signal output level set by Wiper 1 control
+    WIPER_1 = 2;
+    // RF signal output level set by Wiper 2 control
+    WIPER_2 = 3;
+  }
+  // The Amplitude Control Source
+  AmplitudeControl src = 2;
+
+  // Wiper 1 setting, in Percent (0 - 100)
+  double Wiper1Power = 3;
+  // Wiper 2 setting, in Percent (0 - 100)
+  double Wiper2Power = 4;
+}
+
+// \brief Power Settings for Per-Channel enabled Synthesisers
+//
+// On rev C iMS and newer Synthesisers, the RF power level can be modulated either by an internal
+// level setting that is configurable per channel, or from the external modulation input.
+// Use this message combined with the channel_power service call to update the modulation level
+message ChannelPowerSettings
+{
+  // Which channel (1 to 4) should the power setting be applied to.  Greater than 4 => All channels
+  uint32 Channel = 1;
+
+  // Power Setting for internal modulation (0 - 100)
+  double PowerLevel = 2;
+
+  // \enum PowerControl Switches Control source between internal level potentiometer and external modulation signal
+  enum PowerControl
+  {
+    // Use internal level control
+    INTERNAL = 0;
+    // Use external modulation signal
+    EXTERNAL = 1;
+  }
+  // The Control Source
+  PowerControl src = 3;
+}
+  
+// Master Switch enables / disables RF at various points within the signal chain
+message MasterSwitch
+{
+  // Enables / Disables a connected compatible amplifier (in conjunction with channel enable)
+  bool AmplifierEn = 1;
+  // Enables / Disables channels 1 and 2 of a connected compatible amplifier
+  bool RFChannel12En = 2;
+  // Enables / Disables channels 3 and 4 of a connected compatible amplifier
+  bool RFChannel34En = 3;
+  // Enables / Disables external equipment through the built-in high current opto-isolator
+  bool ExternalEn = 4;
+}
+
+// Per-channel global adjustment for RF Signal Phase
+message PhaseTunings
+{
+  // Sets the overall phase adjustment for RF Channel 1 (in Degrees)
+  double Ch1 = 1;
+  // Sets the overall phase adjustment for RF Channel 2 (in Degrees)
+  double Ch2 = 2;
+  // Sets the overall phase adjustment for RF Channel 3 (in Degrees)
+  double Ch3 = 3;
+  // Sets the overall phase adjustment for RF Channel 4 (in Degrees)
+  double Ch4 = 4;
+  // If true, Beam steered phase compensation from the LUT will be applied in reverse order to the RF channel data
+  bool Reverse = 5;
+}
+
+// Tone Settings for the Calibration Tone.  Use this message with the signal_path::set_tone service call
+// to enable and update the calibration tone output
+message CalibrationTone
+{
+  // Calibration Tone Frequency, in MHz
+  double freq = 1;
+  // Calibration Tone Amplitude, in Percent
+  double ampl = 2;
+  // Calibration Tone Phase, in Degrees
+  double phs = 3;
+}
+
+// Enhanced Tone data for up to 4 channels, including Linear Sweep in Frequency or Phase
+message EnhancedTone
+{
+  // Per-Channel Enhanced Tone Specification
+  message ChannelSweep
+  {
+    // Tone Frequency or Start Frequency (if set for a Frequency Linear Sweep)
+    double start_freq = 1;
+    // Linear Sweep End Frequency (ignored if not set for a Frequency Linear Sweep)
+    double end_freq = 2;
+    // Tone Amplitude (ignored in linear sweep modes)
+    double ampl = 3;
+    // Tone Phase or Start Phase (if set for a Phase Linear Sweep)
+    double start_phs = 4;
+    // Linear Sweep End Phase (ignored if not set for a Phase Linear Sweep)
+    double end_phs = 5;
+    // Linear Sweep Upward Ramp Duration in microseconds
+    uint32 up_ramp = 6;
+    // Linear Sweep Downward Ramp Duration in microseconds
+    uint32 down_ramp = 7;
+    // Linear Sweep ramp number of interpolation points
+    uint32 n_steps = 8;
+    // \enum Mode Specify the type of operation to be performed by the channel in Enhanced Tone Mode
+    enum Mode
+    {
+      // No Linear Sweep.  Static Tone output only
+      NoSweep = 0;
+      // Performs a Frequency Linear Sweep with Dwell at End Point
+      FrequencyDwell = 1;
+      // Performs a Frequency Linear Sweep that resets immediately to Start Point on completion of Upward Ramp.
+      FrequencyNoDwell = 2;
+      // Performs a Frequency Modulation between two values.
+      FrequencyFastMod = 3;
+      // Performs a Phase Linear Sweep with Dwell at End Point
+      PhaseDwell = 4;
+      // Performs a Phase Linear Sweep that resets immediately to Start Point on completion of Upward Ramp.
+      PhaseNoDwell = 5;
+      // Performs a Phase Modulation between two values.
+      PhaseFastMod = 6;
+    }
+    // The mode of operation to be performed
+    Mode mode = 9;
+    // \enum DacCurrentReference The Current setting for the DDS DAC output (coarse amplitude control)
+    enum DacCurrentReference
+    {
+      // Full Current Scaling
+      FullScale = 0;
+      // Half Current Scaling
+      HalfScale = 1;
+      // Quarter Current Scaling
+      QuarterScale = 2;
+      // Eighth Current Scaling
+      EighthScale = 3;
+    }
+    // The output current scaling
+    DacCurrentReference dac_ref = 10;
+  }
+  // Any from 1 to all 4 channels of the Synthesiser may be programmed into Enhanced Tone Mode by adding multiple ChannelSweeps in channel order
+  repeated ChannelSweep chan = 1;
+}
+
+// SweepControl allows the client to manually trigger up/down linear sweep ramps for a channel in Enhanced Tone Mode, or set to external Profile signal control
+message SweepControl
+{
+  // If true, Linear Sweep ramps are triggered from software.  If false, Linear Sweep ramps must be controlled in hardware by driving the Synthesiser Profile inputs
+  bool manual_trigger_enable = 1;
+  // Set true to trigger an upward ramp and false in dwell modes to trigger a downward ramp (manual_trigger_enable must be true)
+  bool trig_ch1 = 2;
+  // Set true to trigger an upward ramp and false in dwell modes to trigger a downward ramp (manual_trigger_enable must be true)
+  bool trig_ch2 = 3;
+  // Set true to trigger an upward ramp and false in dwell modes to trigger a downward ramp (manual_trigger_enable must be true)
+  bool trig_ch3 = 4;
+  // Set true to trigger an upward ramp and false in dwell modes to trigger a downward ramp (manual_trigger_enable must be true)
+  bool trig_ch4 = 5;
+}
+
+// \brief Synchronous Data route mapping.
+// 
+// A Synthesiser has 3 Synchronous outputs that update coincident with the Image Point data.
+// The source for the Synthronous data can be software assigned from a range of data inputs
+// using the Synchronous data route mapping service
+message SyncMapping
+{
+  // \enum SyncSink The destination for a synchronous data route map
+  enum SyncSink
+  {
+    // Synchronous Data Output Analog A
+    AnalogA = 0;
+    // Synchronous Data Output Analog B
+    AnalogB = 1;
+    // Synchronous Data Digital Output
+    Digital = 2;
+  }
+  // Synchronous Data Destination for Route Map
+  SyncSink sink = 1;
+
+  // \enum SyncSource The Source of data for a synchronous data route map
+  enum SyncSource
+  {
+    // Frequency of Channel 1
+    FrequencyCh1 = 0;
+    // Frequency of Channel 2
+    FrequencyCh2 = 1;
+    // Frequency of Channel 3
+    FrequencyCh3 = 2;
+    // Frequency of Channel 4
+    FrequencyCh4 = 3;
+    // Amplitude of Channel 1
+    AmplitudeCh1 = 4;
+    // Amplitude of Channel 2
+    AmplitudeCh2 = 5;
+    // Amplitude of Channel 3
+    AmplitudeCh3 = 6;
+    // Amplitude of Channel 4
+    AmplitudeCh4 = 7;
+    // Uncompensated Amplitude of Channel 1
+    AmplitudePreCompCh1 = 8;
+    // Uncompensated Amplitude of Channel 2
+    AmplitudePreCompCh2 = 9;
+    // Uncompensated Amplitude of Channel 3
+    AmplitudePreCompCh3 = 10;
+    // Uncompensated Amplitude of Channel 4
+    AmplitudePreCompCh4 = 11;
+    // Phase of Channel 1
+    PhaseCh1 = 12;
+    // Phase of Channel 2
+    PhaseCh2 = 13;
+    // Phase of Channel 3
+    PhaseCh3 = 14;
+    // Phase of Channel 4
+    PhaseCh4 = 15;
+    // Data from Compensation LUT (either Analog or Digital, depending on SyncSink) - driven by Channel 1 Frequency
+    LookupFieldCh1 = 16;
+    // Data from Compensation LUT (either Analog or Digital, depending on SyncSink) - driven by Channel 2 Frequency
+    LookupFieldCh2 = 17;
+    // Data from Compensation LUT (either Analog or Digital, depending on SyncSink) - driven by Channel 3 Frequency
+    LookupFieldCh3 = 18;
+    // Data from Compensation LUT (either Analog or Digital, depending on SyncSink) - driven by Channel 4 Frequency
+    LookupFieldCh4 = 19;
+    // Data from ImagePoint Sync Analog A Field
+    ImageAnalogA = 20;
+    // Data from ImagePoint Sync Analog B Field
+    ImageAnalogB = 21;
+    // Data from ImagePoint Sync Digital Field
+    ImageDigital = 22;
+  } 
+  // Synchronous Data Source for Route Map
+  SyncSource src = 2;
+}
+
+//
+// Configures the delay feature of the synchronous digital outputs
+// The sync output can be delayed by 0 - 655350ns in steps of 10ns
+// It may also be switched between level and pulsed mode.  In pulsed mode,
+// the pulse length can also be controlled between 0 and 655350ns.
+message SyncDelay
+{
+    // Number of nanoseconds to delay synchronous output
+    uint32 Delay = 1;
+    // Pulse length 
+    uint32 PulseLength = 2;
+    // Enable all outputs as pulsed
+    bool PulseEnAll = 3;
+    // Enabled some outputs as pulsed
+    repeated bool PulseEnBits = 4 [packed = true];
+    // Invert output
+    bool Invert = 5;
+}
+
+// Configures the X/Y Channel Delay feature of rev D iMS Synthesisers
+message ChanDelay
+{
+    // Number of nanoseconds to delay channels 1/2
+    uint32 Delay12 = 1;
+    // Number of nanoseconds to delay channels 3/4
+    uint32 Delay34 = 2;
+}
+
+// Returns information about the current status of the Signal Path service
+message SignalPathStatus
+{
+  // True if Calibration Tone is active
+  bool CalibrationTonePlaying = 1;
+  // True if Enhanced Tone is active (mutually exclusive with Calibration Tone)
+  bool EnhancedTonePlaying = 2;
+}
+
+// Individual flags to set, one per channel
+message ChannelFlags
+{
+  // Flag for channel 1
+  bool Ch1 = 1;
+  // Flag for channel 2
+  bool Ch2 = 2;
+  // Flag for channel 3
+  bool Ch3 = 3;
+  // Flag for channel 4
+  bool Ch4 = 4;
+}
+
+//@}

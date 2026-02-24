@@ -1,0 +1,60 @@
+/// \mainpage iMS HW Server API Documentation
+///
+/// \section sec_Intro Introduction
+///
+/// The iMS Hardware Server is a standalone utility that can be launched as a background process to
+/// interact with iMS Hardware and fulfils all of the necessary communications needed to download
+/// Images, ImageGroups, CompensationTables and ToneBuffers and perform many other hardware related
+/// communications.  The H/W Server can be used to abstract the hardware layer away from user
+/// application code allowing the application designer to concentrate on the key software
+/// differentiators that matter to their design.
+///
+/// The Hardware Server is built upon the Google Remote Procedure Call (gRPC) library as this is
+/// used as the interface for communications between the server process and the user application.
+///
+/// There are many advantages to taking this approach to your application design:
+///
+/// \li Complete abstraction of the hardware interface.  No registering for callbacks on download
+/// completion events or other low level concepts.  A complex operation on the hardware can be
+/// achieved in just a few lines of code.
+/// \li Cross-language portability.  The gRPC interface is written using Google's language-neutral,
+/// platform-neutral, extensible Protocol Buffers.  You compose your structured data using the APIs
+/// described in this documentation in one of the supported languages and gRPC will translate this
+/// into messages that are understood by the service running on the Hardware Server.
+/// \li Server/Client architecture.  Your application becomes the client to the iMS HW server.  This
+/// means with zero effort you can design applications that run over any TCP/IP network.  You can
+/// develop your application to run on a PC in the office while the server is doing the background
+/// work on an embedded server built into the machine on the factory floor.  Of course, both client
+/// and server can also operate on the same system simply by connecting through 'localhost'.
+///
+/// We recommend you read about and understand gRPC before continuing to read the Hardware Server API.
+/// Documentation can be found at:
+///
+/// http://www.grpc.io
+///
+/// \section sec_Lang Supported Languages
+///
+/// We provide source code for all the services and messages defined in the Hardware Server API.
+/// Currently, source code is provided for these languages:
+///
+/// \li C#
+///
+/// In the future, we hope to also provide source code for the following languages
+///
+/// \li Python
+///
+/// \section sec_Usage Usage
+///
+/// The Hardware Server internally maintains a reference to an iMS System.  At startup, this reference
+/// is null and remains so until a client requests the server to connect to a system.  Be aware that 
+/// most functions will fail silently unless a connection is established to an iMS system and the
+/// internal reference is valid.
+///
+/// The first action in client software then should be to use the HardwareList service to return a list
+/// of available iMS Systems attached to the Hardware Server and use the Connect RPC call to establish
+/// a connection to the system.
+///
+/// At present, the server only supports connection to a single iMS System and it requires an explicit
+/// disconnect rpc call when finished with a system before powering off or removing a system.
+/// This behaviour may be improved in future versions of the server.
+///
