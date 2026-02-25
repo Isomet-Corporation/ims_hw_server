@@ -19,3 +19,7 @@ set(ims_hw_server_src_files
 	${src_dir}/ims_hw_server_tonebuffer.cc
 	${src_dir}/ims_hw_server.cc
 )
+
+set(ims_test_client_src_files
+	${src_dir}/ims_test_client.cc
+)

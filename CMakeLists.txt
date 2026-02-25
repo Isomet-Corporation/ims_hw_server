@@ -3,22 +3,41 @@ cmake_minimum_required(VERSION 3.26)
 message(STATUS "Building for Platform: '${CMAKE_GENERATOR_PLATFORM}'")
 cmake_policy(SET CMP0091 NEW) # Required to avoid Conan toolchain error on Windows
 
-set(PROJECT_NAME "ims_hw_server")
+set(SERVER_NAME "ims_hw_server")
+set(CLIENT_NAME "ims_test_client")
 
-project(${PROJECT_NAME} LANGUAGES CXX)
+project("ims_hw_server" LANGUAGES CXX)
 
 # Use C++17 or later
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 # ------------------------------------------------------------
-# Proto generation options
+# Build Options
 # ------------------------------------------------------------
+option(BUILD_HW_SERVER        "Build iMS H/W Server Application" ON)
+option(BUILD_TEST_CLIENT      "Build H/W Test Client Program" OFF)
+
 option(GENERATE_PROTO_CPP     "Generate C++ protobuf/gRPC code" ON)
 option(GENERATE_PROTO_CSHARP  "Generate C# protobuf/gRPC code" OFF)
 option(GENERATE_PROTO_PYTHON  "Generate Python protobuf/gRPC code" OFF)
-option(GENERATE_PROTO_GO      "Generate Go protobuf/gRPC code" OFF)
-option(GENERATE_PROTO_JAVA    "Generate Java protobuf/gRPC code" OFF)
+option(GENERATE_PROTO_OBJC    "Generate Objective C protobuf/gRPC code" OFF)
+option(GENERATE_PROTO_PHP     "Generate PHP protobuf/gRPC code" OFF)
+option(GENERATE_PROTO_RUBY    "Generate Ruby protobuf/gRPC code" OFF)
+option(GENERATE_PROTO_ALL     "Generate ALL protobuf/gRPC code" OFF)
+
+if (${BUILD_HW_SERVER} OR ${BUILD_TEST_CLIENT})
+    set(GENERATE_PROTO_CPP ON)
+endif()
+
+if (${GENERATE_PROTO_ALL})
+    set(GENERATE_PROTO_CPP ON)
+    set(GENERATE_PROTO_CSHARP ON)
+    set(GENERATE_PROTO_PYTHON ON)
+    set(GENERATE_PROTO_OBJC ON)
+    set(GENERATE_PROTO_PHP ON)
+    set(GENERATE_PROTO_RUBY ON)
+endif()
 
 # --- Conan integration ------------------------------------------------------
 if (MSVC)
@@ -44,8 +63,7 @@ set(src_dir     ${CMAKE_CURRENT_SOURCE_DIR}/src)
 set(proto_dir  	${CMAKE_CURRENT_SOURCE_DIR}/protos)
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/ims_hw_server.cmake)
 
-set(PROTOBUF_OUT_DIR  ${CMAKE_CURRENT_SOURCE_DIR}/generated/pb)
-set(GRPC_CPP_OUT_DIR  ${CMAKE_CURRENT_SOURCE_DIR}/generated/grpc-cpp)
+set(GRPC_CPP_OUT_DIR  ${CMAKE_CURRENT_SOURCE_DIR}/generated/cpp)
 
 # --- iMS C++ External Library ------------------------------------------------
 
@@ -72,33 +90,73 @@ find_package(Boost REQUIRED)
 
 # --- Build iMS HW Server ------------------------------------------------
 
-# Add iMS Library directly to this module
-set(IMS_TARGET_NAME imsLibrary)
-set(IMSLIB_BUILD_SHARED OFF)
-add_subdirectory(${IMS_LIB_SUBMODULE})
+if (${BUILD_HW_SERVER} OR ${BUILD_TEST_CLIENT})
+    # Add iMS Library directly to this module
+    set(IMS_TARGET_NAME imsLibrary)
+    set(IMSLIB_BUILD_SHARED OFF)
+    add_subdirectory(${IMS_LIB_SUBMODULE})
 
-add_executable(${PROJECT_NAME}
-    ${ims_hw_server_src_files}
-)
+    # Needed for static build.  This is fragile - there must be a better way! TODO
+    set (IMSHW_RESOURCE_FILE "")
+    if (MSVC AND NOT ${IMSLIB_BUILD_SHARED}) 
+        set (IMSHW_RESOURCE_FILE "${CMAKE_BINARY_DIR}/${IMS_LIB_SUBMODULE}/${IMS_TARGET_NAME}.dir/${CMAKE_BUILD_TYPE}/imshw.res")
+    endif()
+endif()
 
-target_link_libraries(${PROJECT_NAME}
-    PRIVATE
-        proto_cpp
-        ${IMS_TARGET_NAME}
-        gRPC::grpc++
-        protobuf::libprotobuf
-)
+if (${BUILD_HW_SERVER})
 
-target_include_directories(${PROJECT_NAME}
-    PRIVATE
-        ${src_dir}
-        ${GRPC_CPP_OUT_DIR}
-        ${CMAKE_CURRENT_SOURCE_DIR}/${IMS_LIB_SUBMODULE}/include
-)
+    add_executable(${SERVER_NAME}
+        ${ims_hw_server_src_files}
+    )
 
-# Configure iMS Header Linkage
-if (NOT ${IMSLIB_BUILD_SHARED})
-    target_compile_definitions(${PROJECT_NAME} PRIVATE _STATIC_IMS)
+    target_link_libraries(${SERVER_NAME}
+        PRIVATE
+            proto_cpp
+            ${IMS_TARGET_NAME}
+            ${IMSHW_RESOURCE_FILE}
+            gRPC::grpc++
+            protobuf::libprotobuf
+    )
+
+    target_include_directories(${SERVER_NAME}
+        PRIVATE
+            ${src_dir}
+            ${GRPC_CPP_OUT_DIR}
+            ${CMAKE_CURRENT_SOURCE_DIR}/${IMS_LIB_SUBMODULE}/include
+    )
+
+    # Configure application Header Linkage
+    if (NOT ${IMSLIB_BUILD_SHARED})
+        target_compile_definitions(${SERVER_NAME} PRIVATE _STATIC_IMS)
+    endif()
+endif()
+
+if (${BUILD_TEST_CLIENT})
+
+    add_executable(${CLIENT_NAME}
+        ${ims_test_client_src_files}
+    )
+
+    target_link_libraries(${CLIENT_NAME}
+        PRIVATE
+            proto_cpp
+            ${IMS_TARGET_NAME}
+            ${IMSHW_RESOURCE_FILE}
+            gRPC::grpc++
+            protobuf::libprotobuf
+    )
+
+    target_include_directories(${CLIENT_NAME}
+        PRIVATE
+            ${src_dir}
+            ${GRPC_CPP_OUT_DIR}
+            ${CMAKE_CURRENT_SOURCE_DIR}/${IMS_LIB_SUBMODULE}/include
+    )
+
+    # Configure application Header Linkage
+    if (NOT ${IMSLIB_BUILD_SHARED})
+        target_compile_definitions(${CLIENT_NAME} PRIVATE _STATIC_IMS)
+    endif()
 endif()
 
 # ------------------------------------------------------------
@@ -112,7 +170,7 @@ if (GENERATE_PROTO_CPP)
         LANGUAGE cpp
         IMPORT_DIRS ${proto_dir}
         PROTOS ${ims_hw_server_proto_files}
-        PROTOC_OUT_DIR "${PROTOBUF_OUT_DIR}"
+        PROTOC_OUT_DIR "${GRPC_CPP_OUT_DIR}"
     )
 
     ## Generate GRPC files
@@ -134,38 +192,12 @@ if (GENERATE_PROTO_CPP)
 
     target_include_directories(proto_cpp
         PUBLIC
-            ${PROTOBUF_OUT_DIR}
             ${GRPC_CPP_OUT_DIR}
             ${CMAKE_CURRENT_BINARY_DIR}
     )
 endif()
 
-# --- Generate C# API source files -------------------------------------------
-if(GENERATE_PROTO_CSHARP)
-
-    set(CSHARP_OUT_DIR ${CMAKE_BINARY_DIR}/generated/csharp)
-    file(MAKE_DIRECTORY ${CSHARP_OUT_DIR})
-
-    protobuf_generate(
-        TARGET proto_csharp
-        LANGUAGE csharp
-        PROTOS ${ims_hw_server_proto_files}
-        OUT_VAR CSHARP_SRCS
-    )
-
-    add_custom_command(
-        OUTPUT ${CMAKE_BINARY_DIR}/csharp_stamp
-        COMMAND protobuf::protoc
-            --proto_path=${CMAKE_SOURCE_DIR}/protos
-            --csharp_out=${CSHARP_OUT_DIR}
-            --grpc_out=${CSHARP_OUT_DIR}
-            --plugin=protoc-gen-grpc=$<TARGET_FILE:gRPC::grpc_csharp_plugin>
-            ${ims_hw_server_proto_files}
-        COMMAND ${CMAKE_COMMAND} -E touch ${CMAKE_BINARY_DIR}/csharp_stamp
-        DEPENDS ${ims_hw_server_proto_files}
-    )
-
-    add_custom_target(proto_csharp ALL
-        DEPENDS ${CMAKE_BINARY_DIR}/csharp_stamp
-    )
-endif()
+# ------------------------------------------------------------
+# Generate Protobuf + gRPC sources for optional languages
+# ------------------------------------------------------------
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/ims_gen_protobuf.cmake)

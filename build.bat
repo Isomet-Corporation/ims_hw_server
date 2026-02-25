@@ -4,7 +4,7 @@ setlocal enabledelayedexpansion
 REM =======================================================
 REM Input Arguments
 REM =======================================================
-set "options=-c:Release -o:dist"
+set "options=-c:Release -o:dist -s: -t: -p: -a:both"
 :: Set the default option values
 for %%O in (%options%) do for /f "tokens=1,* delims=:" %%A in ("%%O") do set "%%A=%%~B"
 :loop
@@ -31,6 +31,39 @@ if not "%~1"=="" (
 )
 set OUT_DIR=%-o%
 
+set BUILD_HW_SERVER=OFF
+set BUILD_TEST_CLIENT=OFF
+set GENERATE_PROTO_ALL=OFF
+if "%-s%"=="1" ( set BUILD_HW_SERVER=ON)
+if "%-t%"=="1" ( set BUILD_TEST_CLIENT=ON)
+if "%-p%"=="1" ( set GENERATE_PROTO_ALL=ON)
+
+if "%BUILD_HW_SERVER%"=="OFF" if "%BUILD_TEST_CLIENT%"=="OFF" if "%GENERATE_PROTO_ALL%"=="OFF" (
+    echo ERROR: Must specify a build option
+    echo Usage: build.bat [-c Release^|Debug] [-o ^<outdir^>] [-s] [-t] [-p]
+    echo        ^-c Release^|Debug =^> Specify Build Type (default: Release^)
+    echo        -o ^<outdir^>      =^> Location to copy output products
+    echo        -s               =^> Build H/W Server
+    echo        -t               =^> Build Test BUILD_TEST_CLIENT
+    echo        -p               =^> Generate Multiple Language Protobuf definitions and gRPC Services
+    exit /b 1
+)
+
+set BUILD32=0
+if "%-a%"=="both" ( set BUILD32=1)
+if "%-a%"=="32"   ( set BUILD32=1)
+if "%-a%"=="all"  ( set BUILD32=1)
+
+set BUILD64=0
+if "%-a%"=="both" ( set BUILD64=1)
+if "%-a%"=="64"   ( set BUILD64=1)
+if "%-a%"=="all"  ( set BUILD64=1)
+
+if "%BUILD32%"=="0" if "%BUILD64%"=="0" (
+    echo ERROR: You must specify a machine architecture! [Use -a 32, -a 64, -a all]
+    exit /b 1
+)
+
 if NOT EXIST %OUT_DIR% (
     mkdir "%OUT_DIR%"
     if ERRORLEVEL 1 (
@@ -49,6 +82,7 @@ REM Paths
 REM =======================================================
 set BUILD32_DIR=build32
 set BUILD64_DIR=build64
+set GEN_DIR=generated
 
 REM -------------------------------------------------------
 REM Step 1: Check Conan profile
@@ -72,105 +106,92 @@ echo %Patch% > src\patch.txt
 REM -------------------------------------------------------
 REM Step 3: Clean previous builds
 REM -------------------------------------------------------
-rmdir /S /Q "%BUILD32_DIR%" "%BUILD64_DIR%"
+rmdir /S /Q "%BUILD32_DIR%" "%BUILD64_DIR%" "%GEN_DIR%"
 mkdir "%BUILD32_DIR%"
 mkdir "%BUILD64_DIR%"
-
+mkdir "%GEN_DIR%"
 REM =======================================================
 REM Step 4: Build 32-bit HW Server
 REM =======================================================
-echo.
-echo Building 32-bit H/W Server...
-conan install . --profile default -s build_type=%BUILD_TYPE% -s compiler.cppstd=17 -s:b compiler.cppstd=17 -s arch=x86 --build=missing -of %BUILD32_DIR%
-cd %BUILD32_DIR%
-cmake -S .. -B .^
-  -DCMAKE_CXX_FLAGS_DEBUG="/MDd /Zi /Od /Ob0 /RTC1 /DPATCH_VERSION=%Patch%"^
-  -DCMAKE_CXX_FLAGS_RELEASE="/MD /Ox /Ob2 /DNDEBUG /DPATCH_VERSION=%Patch%"^
-  -DCMAKE_BUILD_TYPE=%BUILD_TYPE% -A Win32
-cmake --build . --config %BUILD_TYPE%
+if "%BUILD32%"=="1" (
+    echo.
+    echo Building 32-bit Applications...
+    conan install . --profile default -s build_type=%BUILD_TYPE% -s compiler.cppstd=17 -s:b compiler.cppstd=17 -s arch=x86 --build=missing -of %BUILD32_DIR%
+    cd %BUILD32_DIR%
+    cmake -S .. -B .^
+    -DCMAKE_CXX_FLAGS_DEBUG="/MDd /Zi /Od /Ob0 /RTC1 /DPATCH_VERSION=%Patch%"^
+    -DCMAKE_CXX_FLAGS_RELEASE="/MD /Ox /Ob2 /DNDEBUG /DPATCH_VERSION=%Patch%"^
+    -DBUILD_HW_SERVER=%BUILD_HW_SERVER%^
+    -DBUILD_TEST_CLIENT=%BUILD_TEST_CLIENT%^
+    -DGENERATE_PROTO_ALL=%GENERATE_PROTO_ALL%^
+    -DCMAKE_BUILD_TYPE=%BUILD_TYPE% -A Win32
+    cmake --build . --config %BUILD_TYPE%
 
-IF NOT EXIST %BUILD_TYPE%\ims_hw_server.exe (
-    echo ERROR: 32-bit H/W Server not found!
-    exit /b 1
+    IF NOT EXIST %BUILD_TYPE%\ims_hw_server.exe (
+        echo ERROR: 32-bit H/W Server not found!
+        exit /b 1
+    )
+    cd ..
 )
-cd ..
 
 REM =======================================================
-REM Step 5: Build 64-bit DLL
+REM Step 5: Build 64-bit HW Server
 REM =======================================================
-echo.
-echo Building 64-bit H/W Server...
-conan install . --profile default -s build_type=%BUILD_TYPE% -s compiler.cppstd=17 -s arch=x86_64 --build=missing -of %BUILD64_DIR%
-cd %BUILD64_DIR%
-cmake -S .. -B .^
-  -DCMAKE_C_FLAGS_DEBUG="/MDd /Zi /Od /Ob0 /RTC1 /D_STATIC_IMS /DPATCH_VERSION=%Patch%"^
-  -DCMAKE_CXX_FLAGS_DEBUG="/MDd /Zi /Od /Ob0 /RTC1 /D_STATIC_IMS /DPATCH_VERSION=%Patch%"^
-  -DCMAKE_C_FLAGS_RELEASE="/MD /Ox /Ob2 /DNDEBUG /D_STATIC_IMS /DPATCH_VERSION=%Patch%"^
-  -DCMAKE_CXX_FLAGS_RELEASE="/MD /Ox /Ob2 /DNDEBUG /D_STATIC_IMS /DPATCH_VERSION=%Patch%"^
-  -DCMAKE_BUILD_TYPE=%BUILD_TYPE% -A x64
-cmake --build . --config %BUILD_TYPE%
+if "%BUILD64%"=="1" (
+    echo.
+    echo Building 64-bit Applications...
+    conan install . --profile default -s build_type=%BUILD_TYPE% -s compiler.cppstd=17 -s arch=x86_64 --build=missing -of %BUILD64_DIR%
+    cd %BUILD64_DIR%
+    cmake -S .. -B .^
+    -DCMAKE_CXX_FLAGS_DEBUG="/MDd /Zi /Od /Ob0 /RTC1 /DPATCH_VERSION=%Patch%"^
+    -DCMAKE_CXX_FLAGS_RELEASE="/MD /Ox /Ob2 /DNDEBUG /DPATCH_VERSION=%Patch%"^
+    -DBUILD_HW_SERVER=%BUILD_HW_SERVER%^
+    -DBUILD_TEST_CLIENT=%BUILD_TEST_CLIENT%^
+    -DGENERATE_PROTO_ALL=%GENERATE_PROTO_ALL%^
+    -DCMAKE_BUILD_TYPE=%BUILD_TYPE% -A x64
+    cmake --build . --config %BUILD_TYPE%
 
-IF NOT EXIST %BUILD_TYPE%\ims_hw_server.exe (
-    echo ERROR: 64-bit H/W Server not found!
-    exit /b 1
-)
-cd ..
-exit 0
-
-REM -------------------------------------------------------
-REM Step 6: Copy DLLs to resource folder
-REM -------------------------------------------------------
-copy "%BUILD32_DIR%\%BUILD_TYPE%\%CLIBNAME%32.dll" "%BUILDDOTNET_DIR%\%RESOURCE_DIR%\%CLIBNAME%32.dll"
-copy "%BUILD64_DIR%\%BUILD_TYPE%\%CLIBNAME%64.dll" "%BUILDDOTNET_DIR%\%RESOURCE_DIR%\%CLIBNAME%64.dll"
-
-
-REM -------------------------------------------------------
-REM Step 7: Create temporary project
-REM -------------------------------------------------------
-echo Creating temporary C# project...
-
-set CSPROJ=%BUILDDOTNET_DIR%\iMSNET.csproj
-
-echo ^<Project Sdk="Microsoft.NET.Sdk"^> > %CSPROJ%
-echo   ^<PropertyGroup^> >> %CSPROJ%
-echo     ^<TargetFramework^>netstandard2.0^</TargetFramework^> >> %CSPROJ%
-echo     ^<GenerateAssemblyInfo^>false^</GenerateAssemblyInfo^> >> %CSPROJ%
-echo     ^<AssemblyName^>%CSLIBNAME%^</AssemblyName^> >> %CSPROJ%
-echo   ^</PropertyGroup^> >> %CSPROJ%
-echo   ^<PropertyGroup Condition=" '$(Configuration)' == 'Debug' "^> >> %CSPROJ%
-echo     ^<DebugSymbols^>true^</DebugSymbols^> >> %CSPROJ%
-echo     ^<DebugType^>full^</DebugType^> >> %CSPROJ%
-echo     ^<Optimize^>false^</Optimize^> >> %CSPROJ%
-echo     ^<DefineConstants^>DEBUG^</DefineConstants^> >> %CSPROJ%
-echo   ^</PropertyGroup^> >> %CSPROJ%
-echo   ^<PropertyGroup Condition=" '$(Configuration)' == 'Release' "^> >> %CSPROJ%
-echo     ^<DebugType^>none^</DebugType^> >> %CSPROJ%
-echo     ^<Optimize^>true^</Optimize^> >> %CSPROJ%
-echo   ^</PropertyGroup^> >> %CSPROJ%
-echo   ^<ItemGroup^> >> %CSPROJ%
-echo     ^<Compile Include="%IMSC_FILE%" /^> >> %CSPROJ%
-echo     ^<EmbeddedResource Include="%RESOURCE_DIR%\%CLIBNAME%32.dll" LogicalName="iMSNETlib32" /^> >> %CSPROJ%
-echo     ^<EmbeddedResource Include="%RESOURCE_DIR%\%CLIBNAME%64.dll" LogicalName="iMSNETlib64" /^> >> %CSPROJ%
-echo     ^<Compile Include="%EDL_FILE%" /^> >> %CSPROJ%
-echo     ^<Compile Include="%ASSY_FILE%" /^> >> %CSPROJ%
-echo   ^</ItemGroup^> >> %CSPROJ%
-echo ^</Project^> >> %CSPROJ%
-
-REM -------------------------------------------------------
-REM Step 8: Compile C# wrapper with embedded DLLs
-REM -------------------------------------------------------
-echo Building managed wrapper...
-
-dotnet build %CSPROJ% -c %BUILD_TYPE% -o %OUT_DIR%\%BUILD_TYPE%
-
-IF ERRORLEVEL 1 (
-    echo ERROR: Failed to compile %CSLIBNAME%.dll
-    exit /b 1
+    IF NOT EXIST %BUILD_TYPE%\ims_hw_server.exe (
+        echo ERROR: 64-bit H/W Server not found!
+        exit /b 1
+    )
+    cd ..
 )
 
-echo =======================================================
+REM -------------------------------------------------------
+REM Step 6: Copy Artifacts to output folder
+REM -------------------------------------------------------
+if "%BUILD32%"=="1" (
+    xcopy /S /Q /Y "%BUILD32_DIR%\%BUILD_TYPE%\*.exe" "%OUT_DIR%"\bin\Win32\
+    xcopy /S /Q /Y "protos" "%OUT_DIR%\protos\"
+    xcopy /S /Q /Y "generated" "%OUT_DIR%\grpc\" 
+)
+if "%BUILD64%"=="1" (
+    xcopy /S /Q /Y "%BUILD64_DIR%\%BUILD_TYPE%\*.exe" "%OUT_DIR%"\bin\x64\
+    xcopy /S /Q /Y "protos" "%OUT_DIR%\protos\"
+    xcopy /S /Q /Y "generated" "%OUT_DIR%\grpc\" 
+)
+
+
+echo ==============================================================
 echo Build complete!
-echo %CSLIBNAME%.dll created in %OUT_DIR%\%BUILD_TYPE%
-echo Embedded resources: iMSNETlib32, iMSNETlib64
-echo =======================================================
+echo  - Protobuf files are in %OUT_DIR%\protos
+echo  - Generated Language-specific gRPC/Proto files in %OUT_DIR%\grpc
+if "%BUILD32%"=="1" (
+    if "%BUILD_HW_SERVER%"=="ON" (
+        echo  - 32-bit H/W server in %OUT_DIR%\bin\Win32
+    )
+    if "%BUILD_TEST_CLIENT%"=="ON" (
+        echo  - 32-bit test client in %OUT_DIR%\bin\Win32
+    )
+)
+if "%BUILD64%"=="1" (
+    if "%BUILD_HW_SERVER%"=="ON" (
+        echo  - 64-bit H/W server in %OUT_DIR%\bin\x64
+    )
+    if "%BUILD_TEST_CLIENT%"=="ON" (
+        echo  - 64-bit test client in %OUT_DIR%\bin\x64
+    )
+)
+echo ==============================================================
 echo on
