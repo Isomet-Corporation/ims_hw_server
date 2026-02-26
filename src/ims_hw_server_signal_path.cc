@@ -36,18 +36,19 @@ using namespace iMS;
 class SignalPathServiceImpl::Internal
 {
 public:
-  Internal(std::shared_ptr<IMSSystem> ims) : myiMS(ims), sigpath(nullptr) {}
+  Internal(std::shared_ptr<IMSServerState> state) : m_state(state), sigpath(nullptr) {}
   ~Internal() {if (sigpath != nullptr) delete sigpath;}
-  std::shared_ptr<IMSSystem> myiMS;
+  std::shared_ptr<IMSServerState> m_state;
   bool _enhTonePlaying;
   bool _calibTonePlaying;
 
   bool OKtoProceed() {
-    if ((myiMS == nullptr) || !myiMS->Open()) {
+    auto ims = m_state->get();
+    if (!ims->Open()) {
       return false;
     }
     if (sigpath == nullptr) {
-      sigpath = new SignalPath(myiMS);
+      sigpath = new SignalPath(ims);
     }
     return true; 
   }
@@ -63,7 +64,7 @@ public:
   bool invert = true;
 };
 
-SignalPathServiceImpl::SignalPathServiceImpl(std::shared_ptr<IMSSystem> ims) : m_pImpl(new Internal(ims)) 
+SignalPathServiceImpl::SignalPathServiceImpl(std::shared_ptr<IMSServerState> state) : m_pImpl(new Internal(state)) 
 {
   if (m_pImpl->OKtoProceed()) {
     // Initialise with no tone playing
@@ -92,8 +93,9 @@ SignalPathServiceImpl::~SignalPathServiceImpl()
   Status SignalPathServiceImpl::dds_power(ServerContext* context, const PowerSettings* request,
 					  Empty* response) {
     if (m_pImpl->OKtoProceed()) {
+        auto ims = m_pImpl->m_state->get();
       m_pImpl->sigpath->UpdateDDSPowerLevel(Percent(request->ddspower()));
-      if ((m_pImpl->myiMS->Synth().Model() == "iMS4") || (m_pImpl->myiMS->Synth().Model() == "iMS4b")) {
+      if ((ims->Synth().Model() == "iMS4") || (ims->Synth().Model() == "iMS4b")) {
 	std::cout << "Set DDS Power: DDS(" << request->ddspower() << "%) Wiper 1(" << request->wiper1power() << ") Wiper 2(" << request->wiper2power() <<
 	  ") Src=" << PowerSettings::AmplitudeControl_Name(request->src()) << std::endl;
 	m_pImpl->sigpath->UpdateRFAmplitude(SignalPath::AmplitudeControl::WIPER_1, Percent(request->wiper1power()));
@@ -117,7 +119,8 @@ static inline std::string ChanString(RFChannel chan) {return (chan.IsAll()) ? st
   Status SignalPathServiceImpl::channel_power(ServerContext* context, const ChannelPowerSettings* request,
 					  Empty* response) {
     if (m_pImpl->OKtoProceed()) {
-      if ((m_pImpl->myiMS->Synth().Model() == "iMS4") || (m_pImpl->myiMS->Synth().Model() == "iMS4b")) {
+        auto ims = m_pImpl->m_state->get();
+      if ((ims->Synth().Model() == "iMS4") || (ims->Synth().Model() == "iMS4b")) {
 	std::cout << "Independent channel power settings not supported on this version of Synthesiser. Please use dds_power() instead" << std::endl;
       } else {
 	RFChannel chan = RFChannel::all;
@@ -143,10 +146,11 @@ static inline std::string EnString(bool en) {return en ? std::string("Enable") :
   Status SignalPathServiceImpl::rf_enable(ServerContext* context, const MasterSwitch* request,
 		   Empty* response) {
     if (m_pImpl->OKtoProceed()) {
+        auto ims = m_pImpl->m_state->get();
     std::cout << "Master Switch Enable: Amplifier(" << EnString(request->amplifieren()) << 
       ") RF Channel 1/2(" << EnString(request->rfchannel12en()) << ") RF Channel 3/4(" <<
       EnString(request->rfchannel34en()) << ") External Eqt(" << EnString(request->externalen()) << ")" << std::endl;
-      SystemFunc sf(m_pImpl->myiMS);
+      SystemFunc sf(ims);
       sf.EnableAmplifier(request->amplifieren());
       sf.EnableRFChannels(request->rfchannel12en(), request->rfchannel34en());
       sf.EnableExternal(request->externalen());
@@ -243,12 +247,13 @@ static inline std::string EnString(bool en) {return en ? std::string("Enable") :
   Status SignalPathServiceImpl::set_enh_tone(ServerContext* context, const EnhancedTone* request,
 		   Empty* response) {
     if (m_pImpl->OKtoProceed()) {
-      if ( ((m_pImpl->myiMS->Synth().Model() == "iMS4") && (m_pImpl->myiMS->Synth().GetVersion().revision < 57)) || 
-      ((m_pImpl->myiMS->Synth().Model() == "iMS4b") && (m_pImpl->myiMS->Synth().GetVersion().revision < 68)) ||
-      ((m_pImpl->myiMS->Synth().Model() == "iMS4c") && (m_pImpl->myiMS->Synth().GetVersion().revision < 68)) ||
-      ((m_pImpl->myiMS->Synth().Model() == "iMS4d") && (m_pImpl->myiMS->Synth().GetVersion().revision < 148)) ) {
-	std::cout << "Enhanced Tone Mode not supported on " << m_pImpl->myiMS->Synth().Model() << 
-	  " f/w version " << m_pImpl->myiMS->Synth().GetVersion().revision << std::endl;
+        auto ims = m_pImpl->m_state->get();
+      if ( ((ims->Synth().Model() == "iMS4") && (ims->Synth().GetVersion().revision < 57)) || 
+      ((ims->Synth().Model() == "iMS4b") && (ims->Synth().GetVersion().revision < 68)) ||
+      ((ims->Synth().Model() == "iMS4c") && (ims->Synth().GetVersion().revision < 68)) ||
+      ((ims->Synth().Model() == "iMS4d") && (ims->Synth().GetVersion().revision < 148)) ) {
+	std::cout << "Enhanced Tone Mode not supported on " << ims->Synth().Model() << 
+	  " f/w version " << ims->Synth().GetVersion().revision << std::endl;
 	return Status::OK;
       }
 
@@ -305,10 +310,11 @@ static inline std::string EnString(bool en) {return en ? std::string("Enable") :
 
   Status SignalPathServiceImpl::control_enh_sweep(ServerContext* context, const SweepControl* request, Empty* response) {
     if (m_pImpl->OKtoProceed()) {
-      Auxiliary aux(m_pImpl->myiMS);
+        auto ims = m_pImpl->m_state->get();
+      Auxiliary aux(ims);
       if (request->manual_trigger_enable()) {
 	uint8_t prfl = 0;
-	if (m_pImpl->myiMS->Synth().Model() == "iMS4b") {
+	if (ims->Synth().Model() == "iMS4b") {
 	  // reordered channel layout
 	  if (request->trig_ch1()) prfl |= 2;
 	  if (request->trig_ch2()) prfl |= 1;

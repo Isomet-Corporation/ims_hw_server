@@ -147,31 +147,31 @@ CompensationDownloadBuffer& GetBuffer(unsigned int id, const std::list<Compensat
 
 Status CompensationDownloadServiceImpl::create(ServerContext* context, const compensation_header* request,
 		 DownloadHandle* response) {
-  if (m_ims != nullptr && m_ims->Open()) {
-    downloadCompList.push_back(new CompensationDownloadBuffer(m_ims, request->isxy()));
-    response->set_id(downloadCompList.back()->getContext());
-  }
-  return Status::OK;
+    auto ims = m_state->get();
+    if (ims->Open()) {
+        downloadCompList.push_back(new CompensationDownloadBuffer(ims, request->isxy()));
+        response->set_id(downloadCompList.back()->getContext());
+    }
+    return Status::OK;
 }
 
 Status CompensationDownloadServiceImpl::add(ServerContext* context, ServerReader<compensation_point>* reader,
 	     Empty* response) {
-  compensation_point pt;
-  if (m_ims != nullptr && m_ims->Open()) {
+    compensation_point pt;
     while (reader->Read(&pt)) {
-      // Create an CompensationPoint
-      CompensationPoint comp_pt(pt.amplitude(), pt.phase(), pt.sync_dig(), pt.sync_anlg());
+    // Create an CompensationPoint
+    CompensationPoint comp_pt(pt.amplitude(), pt.phase(), pt.sync_dig(), pt.sync_anlg());
     
-      if (HasBuffer(pt.context().id(), downloadCompList))
-	GetBuffer(pt.context().id(), downloadCompList).AssignNextPoint(comp_pt);
-    }
+    if (HasBuffer(pt.context().id(), downloadCompList))
+        GetBuffer(pt.context().id(), downloadCompList).AssignNextPoint(comp_pt);
   }
   return Status::OK;
 }
 
 Status CompensationDownloadServiceImpl::download(ServerContext* context, const compensation_download* request,
 					  DownloadStatus* response) {
-  if (!m_ims || !m_ims->Open() || !HasBuffer(request->context().id(), downloadCompList)) return Status::OK;
+    auto ims = m_state->get();
+    if (!ims->Open() || !HasBuffer(request->context().id(), downloadCompList)) return Status::OK;
 
   CompensationDownloadBuffer& buf = GetBuffer(request->context().id(), downloadCompList);
   RFChannel chan;
@@ -188,7 +188,7 @@ Status CompensationDownloadServiceImpl::download(ServerContext* context, const c
   if (comp_dl != nullptr) {
     delete comp_dl;
   }
-  comp_dl = new CompensationTableDownload(m_ims, buf.Compensation(), chan);
+  comp_dl = new CompensationTableDownload(ims, buf.Compensation(), chan);
 
   if (comp_ds != nullptr) {
     delete comp_ds;
@@ -199,7 +199,7 @@ Status CompensationDownloadServiceImpl::download(ServerContext* context, const c
   comp_dl->CompensationTableDownloadEventSubscribe(CompensationEvents::DOWNLOAD_ERROR, comp_ds);
 
   // We assume since we are downloading a compensation table that we want to activate it, so turn off the Amplitude and Phase Bypass switches
-  SignalPath sp(m_ims);
+  SignalPath sp(ims);
   sp.EnableImagePathCompensation(SignalPath::Compensation::ACTIVE, SignalPath::Compensation::ACTIVE);
 
   // Set XY Style Phase Compensation if required, or clear if not
@@ -216,7 +216,8 @@ Status CompensationDownloadServiceImpl::download(ServerContext* context, const c
 
 Status CompensationDownloadServiceImpl::dlstatus(ServerContext* context, const DownloadHandle* request,
 					  DownloadStatus* response) {
-  if (!m_ims || !m_ims->Open() || !HasBuffer(request->id(), downloadCompList)) return Status::OK;
+    auto ims = m_state->get();
+    if (!ims->Open() || !HasBuffer(request->id(), downloadCompList)) return Status::OK;
 
   CompensationDownloadBuffer& buf = GetBuffer(request->id(), downloadCompList);
   DownloadStatus& sts = buf.MutableStatus();

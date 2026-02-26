@@ -34,17 +34,18 @@ using namespace iMS;
 class SystemFuncServiceImpl::Internal
 {
 public:
-  Internal(std::shared_ptr<IMSSystem> ims) : myiMS(ims), sysfunc(nullptr) {}
+  Internal(std::shared_ptr<IMSServerState> state) : m_state(state), sysfunc(nullptr) {}
   ~Internal() {if (sysfunc != nullptr) delete sysfunc;}
-  std::shared_ptr<IMSSystem> myiMS;
+  std::shared_ptr<IMSServerState> m_state;
   bool _clockgenActive;
 
   bool OKtoProceed() {
-    if ((myiMS == nullptr) || !myiMS->Open()) {
+    auto ims = m_state->get();
+    if (!ims->Open()) {
       return false;
     }
     if (sysfunc == nullptr) {
-      sysfunc = new SystemFunc(myiMS);
+      sysfunc = new SystemFunc(ims);
     }
     return true; 
   }
@@ -54,7 +55,7 @@ public:
   // Sync Delay parameters
 };
 
-SystemFuncServiceImpl::SystemFuncServiceImpl(std::shared_ptr<IMSSystem> ims) : m_pImpl(new Internal(ims)) 
+SystemFuncServiceImpl::SystemFuncServiceImpl(std::shared_ptr<IMSServerState> state) : m_pImpl(new Internal(state)) 
 {
   if (m_pImpl->OKtoProceed()) {
     // Initialise with no clock gen disabled

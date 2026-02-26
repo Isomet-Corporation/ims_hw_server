@@ -153,7 +153,8 @@ ToneBufferDownloadBuffer& GetBuffer(unsigned int id, const std::list<ToneBufferD
 }
 
 Status ToneBufferDownloadServiceImpl::create(ServerContext* context, const tonebuffer_header* request, DownloadHandle* response) {
-  if (m_ims != nullptr && m_ims->Open()) {
+    auto ims = m_state->get();
+    if (ims->Open()) {
     downloadTbufList.push_back(new ToneBufferDownloadBuffer(request->first(), request->last()));
     response->set_id(downloadTbufList.back()->getContext());
   }
@@ -162,7 +163,8 @@ Status ToneBufferDownloadServiceImpl::create(ServerContext* context, const toneb
 
 Status ToneBufferDownloadServiceImpl::add(ServerContext* context, ServerReader<tonebuffer_entry>* reader, Empty* response) {
   tonebuffer_entry pt;
-  if (m_ims != nullptr && m_ims->Open()) {
+    auto ims = m_state->get();
+    if (ims->Open()) {
     while (reader->Read(&pt)) {
       // Create a TBEntry
       TBEntry tbuf_pt(FAP(pt.freq_ch1(), pt.ampl_ch1(), pt.phs_ch1()),
@@ -179,9 +181,10 @@ Status ToneBufferDownloadServiceImpl::add(ServerContext* context, ServerReader<t
 
 Status ToneBufferDownloadServiceImpl::download(ServerContext* context, const DownloadHandle* request,
 					  DownloadStatus* response) {
-  if (!m_ims || !m_ims->Open() || !HasBuffer(request->id(), downloadTbufList)) {
-    if (!m_ims) std::cout << "m_ims is NULL" << std::endl;
-    if (!m_ims->Open()) std::cout << "Connection to iMS is not open" << std::endl;
+    auto ims = m_state->get();
+    if (!ims->Open() || !HasBuffer(request->id(), downloadTbufList)) {
+    if (!ims) std::cout << "ims is NULL" << std::endl;
+    if (!ims->Open()) std::cout << "Connection to iMS is not open" << std::endl;
     if (!HasBuffer(request->id(), downloadTbufList)) std::cout << "Invalid Tone Buffer ID" << std::endl;
     return Status::OK;
   }
@@ -195,7 +198,7 @@ Status ToneBufferDownloadServiceImpl::download(ServerContext* context, const Dow
   ToneBufferDownload*& tbuf_dl = buf.DL();
   ToneBufferDownloadSupervisor*& tbuf_ds = buf.DS();
   if (tbuf_dl == nullptr) {
-    tbuf_dl = new ToneBufferDownload(m_ims, buf.ToneBuffer());
+    tbuf_dl = new ToneBufferDownload(ims, buf.ToneBuffer());
   }
 
   if (tbuf_ds == nullptr) {
@@ -221,7 +224,8 @@ int retries = 0;
 
 Status ToneBufferDownloadServiceImpl::dlstatus(ServerContext* context, const DownloadHandle* request,
 					  DownloadStatus* response) {
-  if (!m_ims || !m_ims->Open() || !HasBuffer(request->id(), downloadTbufList)) return Status::OK;
+    auto ims = m_state->get();
+    if (!ims->Open() || !HasBuffer(request->id(), downloadTbufList)) return Status::OK;
 
   ToneBufferDownloadBuffer& buf = GetBuffer(request->id(), downloadTbufList);
   DownloadStatus& sts = buf.MutableStatus();
@@ -257,24 +261,27 @@ Status ToneBufferManagerServiceImpl::start(ServerContext* context, const tonebuf
   SignalPath::Compensation AmplComp;
   SignalPath::Compensation PhaseComp;
 
-  if (m_sp == nullptr) {
-    m_sp = new SignalPath(m_ims);
-  }
+    auto ims = m_state->get();
+    if (ims->Open()) {
 
-  AmplComp = (request->amplitude_compensation_enabled() ? 
-	      SignalPath::Compensation::ACTIVE : SignalPath::Compensation::BYPASS);
-  PhaseComp = (request->phase_compensation_enabled() ? 
-	      SignalPath::Compensation::ACTIVE : SignalPath::Compensation::BYPASS);
-  switch(request->control())
-    {
-    case tonebuffer_params::HOST: tbc = SignalPath::ToneBufferControl::HOST; break;
-    case tonebuffer_params::EXTERNAL: tbc = SignalPath::ToneBufferControl::EXTERNAL; break;
-    case tonebuffer_params::EXTERNAL_EXTENDED: tbc = SignalPath::ToneBufferControl::EXTERNAL_EXTENDED; break;
-      //    case tonebuffer_params::OFF: tbc = SignalPath::ToneBufferControl::OFF; break;
+    if (m_sp == nullptr) {
+        m_sp = new SignalPath(ims);
     }
 
-  m_sp->UpdateLocalToneBuffer(tbc, 0, AmplComp, PhaseComp);
+    AmplComp = (request->amplitude_compensation_enabled() ? 
+            SignalPath::Compensation::ACTIVE : SignalPath::Compensation::BYPASS);
+    PhaseComp = (request->phase_compensation_enabled() ? 
+            SignalPath::Compensation::ACTIVE : SignalPath::Compensation::BYPASS);
+    switch(request->control())
+        {
+        case tonebuffer_params::HOST: tbc = SignalPath::ToneBufferControl::HOST; break;
+        case tonebuffer_params::EXTERNAL: tbc = SignalPath::ToneBufferControl::EXTERNAL; break;
+        case tonebuffer_params::EXTERNAL_EXTENDED: tbc = SignalPath::ToneBufferControl::EXTERNAL_EXTENDED; break;
+        //    case tonebuffer_params::OFF: tbc = SignalPath::ToneBufferControl::OFF; break;
+        }
 
+    m_sp->UpdateLocalToneBuffer(tbc, 0, AmplComp, PhaseComp);
+    }
   return Status::OK;
 }
 

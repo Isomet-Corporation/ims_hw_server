@@ -24,6 +24,7 @@
 #include "ims_hw_server_downloader.h"
 
 #include <atomic>
+#include <iostream>
 
 #include "Image.h"
 #include "IMSTypeDefs.h"
@@ -169,35 +170,32 @@ ImageDownloadBuffer& GetBuffer(unsigned int id, const std::list<ImageDownloadBuf
   return *(buf_list.front());
 }
 
-ImageDownloadServiceImpl::ImageDownloadServiceImpl(std::shared_ptr<iMS::IMSSystem> ims)
-  : image_downloader::Service(), m_ims(ims), m_firstRun(true) {}
+ImageDownloadServiceImpl::ImageDownloadServiceImpl(std::shared_ptr<IMSServerState> state)
+  : image_downloader::Service(), m_state(state), m_firstRun(true) {}
 
 Status ImageDownloadServiceImpl::create(ServerContext* context, const image_header* request,
 		 DownloadHandle* response) {
-  if (m_ims != nullptr && m_ims->Open()) {
     downloadImageList.push_back(new ImageDownloadBuffer
-				(request->name(), kHz(request->clock_rate()), request->ext_divide()));
-    response->set_id(downloadImageList.back()->getContext());
-  }
-  return Status::OK;
+                (request->name(), kHz(request->clock_rate()), request->ext_divide()));
+    auto id = downloadImageList.back()->getContext();
+    response->set_id(id);
+    return Status::OK;
 }
 
 Status ImageDownloadServiceImpl::add(ServerContext* context, ServerReader<image_point>* reader,
 	     Empty* response) {
   image_point pt;
-  if (m_ims != nullptr && m_ims->Open()) {
     while (reader->Read(&pt)) {
-      // Create an ImagePoint
-      ImagePoint img_pt(
-			FAP(pt.freq_ch1(), pt.ampl_ch1(), pt.phs_ch1()),
-			FAP(pt.freq_ch2(), pt.ampl_ch2(), pt.phs_ch2()),
-			FAP(pt.freq_ch3(), pt.ampl_ch3(), pt.phs_ch3()),
-			FAP(pt.freq_ch4(), pt.ampl_ch4(), pt.phs_ch4()),
-			static_cast<float>(pt.synca1()), static_cast<float>(pt.synca2()), pt.syncd());
+    // Create an ImagePoint
+    ImagePoint img_pt(
+            FAP(pt.freq_ch1(), pt.ampl_ch1(), pt.phs_ch1()),
+            FAP(pt.freq_ch2(), pt.ampl_ch2(), pt.phs_ch2()),
+            FAP(pt.freq_ch3(), pt.ampl_ch3(), pt.phs_ch3()),
+            FAP(pt.freq_ch4(), pt.ampl_ch4(), pt.phs_ch4()),
+            static_cast<float>(pt.synca1()), static_cast<float>(pt.synca2()), pt.syncd());
     
-      if (HasBuffer(pt.context().id(), downloadImageList))
-	GetBuffer(pt.context().id(), downloadImageList).AddPoint(img_pt);
-    }
+    if (HasBuffer(pt.context().id(), downloadImageList))
+    GetBuffer(pt.context().id(), downloadImageList).AddPoint(img_pt);
   }
   return Status::OK;
 }
@@ -226,7 +224,8 @@ Status ImageDownloadServiceImpl::format(ServerContext* context, const image_form
 
 Status ImageDownloadServiceImpl::download(ServerContext* context, const DownloadHandle* request,
 					  DownloadStatus* response) {
-  if (!m_ims || !m_ims->Open() || !HasBuffer(request->id(), downloadImageList)) return Status::OK;
+    auto ims = m_state->get();
+    if (!ims->Open() || !HasBuffer(request->id(), downloadImageList)) return Status::OK;
 
   if (m_firstRun)
   {
@@ -234,7 +233,7 @@ Status ImageDownloadServiceImpl::download(ServerContext* context, const Download
     // All downloads fail until a DMA Abort is issued that reinitialises the DMA Interrupts, due to the
     //  improper placement of the startup DMA Interrupt initialisation prior to Ethernet stack
     // Send a ForceStop command which implicitly causes a DMA Abort
-    ImagePlayer pl(m_ims, Image());
+    ImagePlayer pl(ims, Image());
     pl.Stop(ImagePlayer::StopStyle::IMMEDIATELY);
     m_firstRun = false;
   }
@@ -242,7 +241,7 @@ Status ImageDownloadServiceImpl::download(ServerContext* context, const Download
   ImageDownload*& img_dl = GetBuffer(request->id(), downloadImageList).DL();
   ImageDownloadSupervisor*& img_ds = GetBuffer(request->id(), downloadImageList).DS();
   if (img_dl == nullptr) {
-    img_dl = new ImageDownload(m_ims, GetBuffer(request->id(), downloadImageList).Image());
+    img_dl = new ImageDownload(ims, GetBuffer(request->id(), downloadImageList).Image());
   }
 
   // Set Format
@@ -271,7 +270,8 @@ Status ImageDownloadServiceImpl::download(ServerContext* context, const Download
 
 Status ImageDownloadServiceImpl::dlstatus(ServerContext* context, const DownloadHandle* request,
 					  DownloadStatus* response) {
-  if (!m_ims || !m_ims->Open() || !HasBuffer(request->id(), downloadImageList)) return Status::OK;
+    auto ims = m_state->get();
+    if (!ims->Open() || !HasBuffer(request->id(), downloadImageList)) return Status::OK;
 
   DownloadStatus& sts = GetBuffer(request->id(), downloadImageList).MutableStatus();
   ImageDownloadSupervisor*& ds = GetBuffer(request->id(), downloadImageList).DS();

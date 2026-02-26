@@ -24,6 +24,7 @@
 #include <grpc++/grpc++.h>
 
 #include "image_player.grpc.pb.h"
+#include "ims_hw_server_state.h"
 
 #include "Image.h"
 #include "ImageOps.h"
@@ -45,7 +46,7 @@ class PlaybackHandler;
 // Class to support the image_downloader protobuf service
 class ImagePlayerServiceImpl final : public image_player::Service {
  public:
-  ImagePlayerServiceImpl(std::shared_ptr<iMS::IMSSystem> ims);
+  ImagePlayerServiceImpl(std::shared_ptr<IMSServerState> state);
   ~ImagePlayerServiceImpl();
 
   // The Services
@@ -65,5 +66,5 @@ class ImagePlayerServiceImpl final : public image_player::Service {
 
   PlaybackHandler* p_pbh;
   iMS::ImageIndex idx { -1 };
-  std::shared_ptr<iMS::IMSSystem> m_ims;
+  std::shared_ptr<IMSServerState> m_state;
 };

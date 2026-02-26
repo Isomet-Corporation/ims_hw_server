@@ -35,6 +35,8 @@
 #include "filesystem_table.grpc.pb.h"
 #include "app_version.grpc.pb.h"
 
+#include "ims_hw_server_state.h"
+
 #include "ConnectionList.h"
 #include "ImageOps.h"
 #include "Filesystem.h"
@@ -91,8 +93,8 @@ using ims_hw_server::app_version;
 
 using namespace iMS;
 
-// the iMS System object (only one connection permitted)
-static std::shared_ptr<IMSSystem> thisIMS = nullptr;
+// access the iMS System object
+static std::shared_ptr<IMSServerState> imsState;
 
 // Class to support the software version reporting server
 class AppVersionServiceImpl final : public app_version::Service {
@@ -204,8 +206,7 @@ class HWListServiceImpl final : public hw_list::Service {
 
     std::cout << "Scan returned " << fulliMSList.size() << " systems." << std::endl;
 
-    for (std::vector<std::shared_ptr<IMSSystem>>::const_iterator it = fulliMSList.cbegin(); it != fulliMSList.cend(); ++it) {
-        auto ims = *it;
+    for (auto ims : fulliMSList) {
         ims_system new_ims;
       new_ims.set_connport(ims->ConnPort());
       if (ims->Synth().IsValid()) {
@@ -265,34 +266,27 @@ class HWListServiceImpl final : public hw_list::Service {
 		 ConnectionStatus* response) override {
     response->set_isopen(false);
 
-    if (thisIMS) thisIMS.reset();
-
-    for (std::vector<std::shared_ptr<IMSSystem>>::iterator it = fulliMSList.begin(); it != fulliMSList.end(); ++it) {
-        auto ims = *it;        
+    for (auto ims: fulliMSList) {
       if (ims->ConnPort() == request->connport()) {
 	    ims->Connect();
 	    if (ims->Open()) {
             std::cout << "Connected to iMS System " << ims->ConnPort() << std::endl;
             response->set_isopen(true);
-            thisIMS = ims;
+            imsState->set(ims);
         } else {
             std::cout << "Connection to iMS System " << ims->ConnPort() << ": Attempt failed" << std::endl;
         }
       }
     }
-    if (thisIMS && !thisIMS->Open()) 
-      {
-    	thisIMS.reset();
-	    thisIMS = nullptr;
-      }
     return Status::OK;
   }
 
   Status disconnect(ServerContext* context, const ims_system* request,
 		 ConnectionStatus* response) override {
-    if (thisIMS && thisIMS->Open()) {
-      thisIMS->Disconnect();
-      if (thisIMS->Open()) {
+    auto ims = imsState->get();
+    if (ims->Open()) {
+      ims->Disconnect();
+      if (ims->Open()) {
 	std::cout << "Disconection from iMS System: Attempt failed" << std::endl;
       } else {
 	std::cout << "Disconnected from iMS System" << std::endl;
@@ -304,14 +298,14 @@ class HWListServiceImpl final : public hw_list::Service {
 
   Status reset(ServerContext* context, const Empty* request,
 		 Empty* response) override {
-    if (thisIMS && thisIMS->Open()) {
-	thisIMS->Disconnect();
-	if (thisIMS->Open()) {
-	  std::cout << "Disconection from iMS System: Attempt failed" << std::endl;
-	} else {
-	  std::cout << "Disconnected from iMS System" << std::endl;
-	}
-      thisIMS.reset(); thisIMS = nullptr;
+    auto ims = imsState->get();
+    if (ims->Open()) {
+        ims->Disconnect();
+        if (ims->Open()) {
+            std::cout << "Disconection from iMS System: Attempt failed" << std::endl;
+        } else {
+            std::cout << "Disconnected from iMS System" << std::endl;
+        }
     }
     fulliMSList.clear();
     return Status::OK;
@@ -332,8 +326,9 @@ class ImageTableViewerServiceImpl final : public image_table_viewer::Service
 
   Status image_detail(ServerContext* context, const ims_system* request,
 		      ServerWriter<image_table_entry>* writer) override {
-    if (thisIMS && thisIMS->Open()) {
-      ImageTableViewer itv(thisIMS);
+    auto ims = imsState->get();
+    if (ims->Open()) {
+      ImageTableViewer itv(ims);
       for (int i=0; i<itv.Entries(); i++) {
 	image_table_entry ite;
 	ite.set_handle(itv[i].Handle());
@@ -362,8 +357,9 @@ class FilesystemTableViewerServiceImpl final : public filesystem_table_viewer::S
 
   Status fileentry_detail(ServerContext* context, const ims_system* request,
 		      ServerWriter<filesystem_table_entry>* writer) override {
-    if (thisIMS && thisIMS->Open()) {
-      FileSystemTableViewer fstv(thisIMS);
+    auto ims = imsState->get();
+    if (ims->Open()) {
+      FileSystemTableViewer fstv(ims);
       for (int i=0; i<fstv.Entries(); i++) {
 	filesystem_table_entry fste;
 	fste.set_isdefault(fstv[i].IsDefault());
@@ -381,8 +377,9 @@ class FilesystemTableViewerServiceImpl final : public filesystem_table_viewer::S
 
   Status is_valid(ServerContext* context, const ims_system* request,
 		      FilesystemValid* response) override {
-    if (thisIMS && thisIMS->Open()) {
-      FileSystemTableViewer fstv(thisIMS);
+    auto ims = imsState->get();
+    if (ims->Open()) {
+      FileSystemTableViewer fstv(ims);
       response->set_valid(fstv.IsValid());
       std::cout << "Returning System FileSystemTable state: " << (fstv.IsValid() ? "valid" : "not valid") << std::endl;
     }
@@ -396,14 +393,14 @@ void RunServer() {
   HWListServiceImpl service;
   ImageTableViewerServiceImpl imgtbl_service;
   FilesystemTableViewerServiceImpl fst_service;
-  ImageDownloadServiceImpl imgdl_service(thisIMS);
-  SignalPathServiceImpl sigpath_service(thisIMS);
-  ImagePlayerServiceImpl imgpl_service(thisIMS);
-  CompensationDownloadServiceImpl compdl_service(thisIMS);
+  ImageDownloadServiceImpl imgdl_service(imsState);
+  SignalPathServiceImpl sigpath_service(imsState);
+  ImagePlayerServiceImpl imgpl_service(imsState);
+  CompensationDownloadServiceImpl compdl_service(imsState);
   AppVersionServiceImpl appver_service;
-  ToneBufferDownloadServiceImpl tbdl_service(thisIMS);
-  ToneBufferManagerServiceImpl tbmgr_service(thisIMS);
-  SystemFuncServiceImpl sysfunc_service(thisIMS);
+  ToneBufferDownloadServiceImpl tbdl_service(imsState);
+  ToneBufferManagerServiceImpl tbmgr_service(imsState);
+  SystemFuncServiceImpl sysfunc_service(imsState);
 
   ServerBuilder builder;
   // Listen on the given address without any authentication mechanism.
@@ -438,6 +435,7 @@ void RunServer() {
 }
 
 int main(int argc, char** argv) {
+  imsState = std::make_shared<IMSServerState>();
   RunServer();
 
   return 0;

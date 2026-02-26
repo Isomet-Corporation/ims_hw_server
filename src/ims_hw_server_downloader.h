@@ -24,6 +24,7 @@
 #include <grpc++/grpc++.h>
 
 #include "image_player.grpc.pb.h"
+#include "ims_hw_server_state.h"
 
 #include <list>
 
@@ -49,7 +50,7 @@ class ImageDownloadBuffer;
 // Class to support the image_downloader protobuf service
 class ImageDownloadServiceImpl final : public image_downloader::Service {
  public:
- ImageDownloadServiceImpl(std::shared_ptr<iMS::IMSSystem> ims);
+ ImageDownloadServiceImpl(std::shared_ptr<IMSServerState> state);
 
   // The Services
   Status create(ServerContext* context, const image_header* request,
@@ -66,5 +67,5 @@ class ImageDownloadServiceImpl final : public image_downloader::Service {
  private:
   bool m_firstRun;
   std::list<ImageDownloadBuffer*> downloadImageList;
-  std::shared_ptr<iMS::IMSSystem> m_ims;
+  std::shared_ptr<IMSServerState> m_state;
 };

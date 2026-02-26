@@ -24,6 +24,7 @@
 #include <grpc++/grpc++.h>
 
 #include "signal_path.grpc.pb.h"
+#include "ims_hw_server_state.h"
 #include "IMSSystem.h"
 
 using grpc::Status;
@@ -51,7 +52,7 @@ using ims_hw_server::signal_path;
 
 class SignalPathServiceImpl final : public signal_path::Service {
  public:
-  SignalPathServiceImpl(std::shared_ptr<iMS::IMSSystem> ims);
+  SignalPathServiceImpl(std::shared_ptr<IMSServerState> state);
   ~SignalPathServiceImpl();
 
   // The Services

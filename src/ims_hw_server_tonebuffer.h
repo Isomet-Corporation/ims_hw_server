@@ -24,6 +24,7 @@
 #include <grpc++/grpc++.h>
 
 #include "tone_buffer.grpc.pb.h"
+#include "ims_hw_server_state.h"
 
 #include <list>
 
@@ -52,7 +53,7 @@ class ToneBufferDownloadBuffer;
 // Class to support the tone buffer downloader protobuf service
 class ToneBufferDownloadServiceImpl final : public tonebuffer_downloader::Service {
  public:
- ToneBufferDownloadServiceImpl(std::shared_ptr<iMS::IMSSystem> ims) : tonebuffer_downloader::Service(), m_ims(ims) {}
+ ToneBufferDownloadServiceImpl(std::shared_ptr<IMSServerState> state) : tonebuffer_downloader::Service(), m_state(state) {}
 
   // The Services
   Status create(ServerContext* context, const tonebuffer_header* request,
@@ -66,13 +67,13 @@ class ToneBufferDownloadServiceImpl final : public tonebuffer_downloader::Servic
 
  private:
   std::list<ToneBufferDownloadBuffer*> downloadTbufList;
-  std::shared_ptr<iMS::IMSSystem> m_ims;
+  std::shared_ptr<IMSServerState> m_state;
 };
 
 // Class to support the tone buffer manager protobuf service
 class ToneBufferManagerServiceImpl final : public tonebuffer_manager::Service {
  public:
- ToneBufferManagerServiceImpl(std::shared_ptr<iMS::IMSSystem> ims) : tonebuffer_manager::Service(), m_ims(ims), m_sp(nullptr) {}
+ ToneBufferManagerServiceImpl(std::shared_ptr<IMSServerState> state) : tonebuffer_manager::Service(), m_state(state), m_sp(nullptr) {}
   ~ToneBufferManagerServiceImpl() {if (m_sp != nullptr) {delete m_sp; m_sp = nullptr; } }
 
   // The Services
@@ -85,5 +86,5 @@ class ToneBufferManagerServiceImpl final : public tonebuffer_manager::Service {
 
  private:
   iMS::SignalPath* m_sp;
-  std::shared_ptr<iMS::IMSSystem> m_ims;
+  std::shared_ptr<IMSServerState> m_state;
 };

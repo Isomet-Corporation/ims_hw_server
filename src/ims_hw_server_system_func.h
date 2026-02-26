@@ -24,6 +24,7 @@
 #include <grpc++/grpc++.h>
 
 #include "system_func.grpc.pb.h"
+#include "ims_hw_server_state.h"
 #include "IMSSystem.h"
 
 using grpc::Status;
@@ -38,7 +39,7 @@ using ims_hw_server::sys_func;
 
 class SystemFuncServiceImpl final : public sys_func::Service {
  public:
-  SystemFuncServiceImpl(std::shared_ptr<iMS::IMSSystem> ims);
+  SystemFuncServiceImpl(std::shared_ptr<IMSServerState> state);
   ~SystemFuncServiceImpl();
 
   // The Services

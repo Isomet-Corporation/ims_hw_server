@@ -24,6 +24,7 @@
 #include <grpc++/grpc++.h>
 
 #include "compensation.grpc.pb.h"
+#include "ims_hw_server_state.h"
 
 #include <list>
 
@@ -49,7 +50,7 @@ class CompensationDownloadBuffer;
 // Class to support the compensation downloader protobuf service
 class CompensationDownloadServiceImpl final : public compensation_downloader::Service {
  public:
- CompensationDownloadServiceImpl(std::shared_ptr<iMS::IMSSystem> ims) : compensation_downloader::Service(), m_ims(ims) {}
+ CompensationDownloadServiceImpl(std::shared_ptr<IMSServerState> state) : compensation_downloader::Service(), m_state(state) {}
 
   // The Services
   Status create(ServerContext* context, const compensation_header* request,
@@ -63,5 +64,5 @@ class CompensationDownloadServiceImpl final : public compensation_downloader::Se
 
  private:
   std::list<CompensationDownloadBuffer*> downloadCompList;
-  std::shared_ptr<iMS::IMSSystem> m_ims;
+  std::shared_ptr<IMSServerState> m_state;
 };
