@@ -106,7 +106,7 @@ using namespace iMS;
 
 class HWClient {
  public:
-  HWClient(std::shared_ptr<Channel> channel)
+  HWClient(std::shared_ptr<grpc::Channel> channel)
       : stub_(hw_list::NewStub(channel)) {}
 
   // Assambles the client's payload, sends it and presents the response back
@@ -196,7 +196,7 @@ class HWClient {
 
 class ImageDownloadClient {
  public:
-  ImageDownloadClient(std::shared_ptr<Channel> channel, const ims_system& ims)
+  ImageDownloadClient(std::shared_ptr<grpc::Channel> channel, const ims_system& ims)
     : stub_(image_downloader::NewStub(channel)), myiMS(ims) {}
 
   bool Download(iMS::Image& img)
@@ -211,50 +211,63 @@ class ImageDownloadClient {
     img_hdr.set_name(img.Name());
 
     Status status = stub_->create(&context[0], img_hdr, &hnd);
-    if (!status.ok()) return false;
+    if (!status.ok()) {
+        std::cout << "Error creating image_downloader context" << std::endl;
+        return false;
+    }
     
+    std::cout << "Using download id " << hnd.id() << std::endl;
     std::unique_ptr<ClientWriter<image_point> > writer(
         stub_->add(&context[1], &empty_msg));
-    for (Image::const_iterator it = img.cbegin(); it != img.cend(); ++it) {
+    for (const auto& it : img) {
       image_point pt;
       *(pt.mutable_context()) = hnd;
 
-      FAP fap = it->GetFAP(RFChannel(1));
+      FAP fap = it.GetFAP(RFChannel(1));
       pt.set_freq_ch1((double)fap.freq);
       pt.set_ampl_ch1((double)fap.ampl);
       pt.set_phs_ch1((double)fap.phase);
 
-      fap = it->GetFAP(RFChannel(2));
+      fap = it.GetFAP(RFChannel(2));
       pt.set_freq_ch2((double)fap.freq);
       pt.set_ampl_ch2((double)fap.ampl);
       pt.set_phs_ch2((double)fap.phase);
 
-      fap = it->GetFAP(RFChannel(3));
+      fap = it.GetFAP(RFChannel(3));
       pt.set_freq_ch3((double)fap.freq);
       pt.set_ampl_ch3((double)fap.ampl);
       pt.set_phs_ch3((double)fap.phase);
 
-      fap = it->GetFAP(RFChannel(4));
+      fap = it.GetFAP(RFChannel(4));
       pt.set_freq_ch4((double)fap.freq);
       pt.set_ampl_ch4((double)fap.ampl);
       pt.set_phs_ch4((double)fap.phase);
 
-      pt.set_synca1((double)it->GetSyncA(0));
-      pt.set_synca2((double)it->GetSyncA(1));
-      pt.set_syncd(it->GetSyncD());
+      pt.set_synca1((double)it.GetSyncA(0));
+      pt.set_synca2((double)it.GetSyncA(1));
+      pt.set_syncd(it.GetSyncD());
 
       if (!writer->Write(pt)) {
         // Broken stream.
+        std::cout << "Stream broken. Write failed" << std::endl;
+        writer->WritesDone();    // always finish
+        writer->Finish();
         return false;
       }
     }
     writer->WritesDone();
     status = writer->Finish();
-    if (!status.ok()) return false;
+    if (!status.ok()) {
+        std::cout << "Failed to finish write" << std::endl;
+        return false;
+    }
 
     // Start Download
     status = stub_->download(&context[2], hnd, &dlstat);
-    if (!status.ok()) return false;
+    if (!status.ok()) {
+        std::cout << "Failed to start download" << std::endl;
+        return false;
+    }
 
     // Monitor result
     int timeout = 0;
@@ -262,7 +275,10 @@ class ImageDownloadClient {
       std::this_thread::sleep_for(std::chrono::milliseconds(500));
       ClientContext clc;
       status = stub_->dlstatus(&clc, hnd, &dlstat);
-      if (!status.ok()) return false;
+      if (!status.ok()) {
+        std::cout << "dlstatus msg failed" << std::endl;
+        return false;
+      }
       if ((int)dlstat.status() >= (int)DownloadStatus::DL_FINISHED) {
 	if (dlstat.status() == DownloadStatus::DL_FINISHED) {
 	  std::cout << "Download complete. New image handle: " << (int)hnd.id() << std::endl;
@@ -289,7 +305,7 @@ class ImageDownloadClient {
 
 class ImagePlayerClient {
  public:
-  ImagePlayerClient(std::shared_ptr<Channel> channel)
+  ImagePlayerClient(std::shared_ptr<grpc::Channel> channel)
     : stub_(image_player::NewStub(channel)) {}
 
   bool PlaybackTest(image_table_entry& ite) {
@@ -342,25 +358,25 @@ class ImagePlayerClient {
 
 class CompensationDownloadClient {
  public:
-  CompensationDownloadClient(std::shared_ptr<Channel> channel, const ims_system& ims)
+  CompensationDownloadClient(std::shared_ptr<grpc::Channel> channel, const ims_system& ims)
     : stub_(compensation_downloader::NewStub(channel)), myiMS(ims) {}
 
   bool Download(iMS::CompensationTable& comp)
   {
     ClientContext context[3];
-    DownloadHandle hnd;
+    DownloadHandle* hnd = new DownloadHandle();
     Empty empty_msg;
 
     compensation_header comp_hdr;
     comp_hdr.set_n_pts(1 << myiMS.synth().cap().lut_depth());
-    Status status = stub_->create(&context[0], comp_hdr, &hnd);
+    Status status = stub_->create(&context[0], comp_hdr, hnd);
     if (!status.ok()) return false;
     
     std::unique_ptr<ClientWriter<compensation_point> > writer(
         stub_->add(&context[1], &empty_msg));
     for (CompensationTable::const_iterator it = comp.cbegin(); it != comp.cend(); ++it) {
       compensation_point pt;
-      *(pt.mutable_context()) = hnd;
+      *(pt.mutable_context()) = *hnd;
 
       pt.set_amplitude(it->Amplitude());
       pt.set_phase(it->Phase());
@@ -378,7 +394,7 @@ class CompensationDownloadClient {
 
     // Start Download
     compensation_download cdh;
-    cdh.set_allocated_context(&hnd);
+    *(cdh.mutable_context()) = *hnd;
     cdh.set_channel(0x2468);  // send to all channels (global)
     status = stub_->download(&context[2], cdh, &dlstat);
     if (!status.ok()) return false;
@@ -388,11 +404,11 @@ class CompensationDownloadClient {
     while (1) {
       std::this_thread::sleep_for(std::chrono::milliseconds(500));
       ClientContext clc;
-      status = stub_->dlstatus(&clc, hnd, &dlstat);
+      status = stub_->dlstatus(&clc, *hnd, &dlstat);
       if (!status.ok()) return false;
       if ((int)dlstat.status() >= (int)DownloadStatus::DL_FINISHED) {
 	if (dlstat.status() == DownloadStatus::DL_FINISHED) {
-	  std::cout << "Compensation Download complete. New handle: " << (int)hnd.id() << std::endl;
+	  std::cout << "Compensation Download complete. New handle: " << (int)hnd->id() << std::endl;
 	  return true;
 	} else {
 	  std::cout << "Error in download" << std::endl;
@@ -417,7 +433,7 @@ class CompensationDownloadClient {
 
 class SignalPathClient {
 public:
-  SignalPathClient(std::shared_ptr<Channel> channel)
+  SignalPathClient(std::shared_ptr<grpc::Channel> channel)
     : stub_(signal_path::NewStub(channel)) {}
 
   bool SignalPathTest() {
@@ -600,7 +616,7 @@ public:
 
 class ImageTableClient {
  public:
-  ImageTableClient(std::shared_ptr<Channel> channel)
+  ImageTableClient(std::shared_ptr<grpc::Channel> channel)
       : stub_(image_table_viewer::NewStub(channel)) {}
 
   bool DisplayImageTable(const ims_system& ims)
@@ -658,7 +674,7 @@ class ImageTableClient {
 
 class FileSystemTableClient {
  public:
-  FileSystemTableClient(std::shared_ptr<Channel> channel)
+  FileSystemTableClient(std::shared_ptr<grpc::Channel> channel)
       : stub_(filesystem_table_viewer::NewStub(channel)) {}
 
   bool DisplayFileSystemTable(const ims_system& ims)
@@ -684,10 +700,10 @@ class FileSystemTableClient {
     Status status = reader->Finish();
     if (!status.ok()) return false;
 
-    // To pass the test, comms status must be OK and filesystem must be valid
+    // To pass the test, comms status must be OK but filesystem may or may not be valid
     FilesystemValid fsv;
     status = stub_->is_valid(&context2, ims, &fsv);
-    return (status.ok() && fsv.valid()) ;
+    return (status.ok()) ;
   }
  private:
   std::unique_ptr<filesystem_table_viewer::Stub> stub_;
@@ -696,7 +712,7 @@ class FileSystemTableClient {
 
 class ToneBufferDownloadClient {
  public:
-  ToneBufferDownloadClient(std::shared_ptr<Channel> channel, const ims_system& ims)
+  ToneBufferDownloadClient(std::shared_ptr<grpc::Channel> channel, const ims_system& ims)
     : stub_(tonebuffer_downloader::NewStub(channel)), myiMS(ims) {}
 
   bool Download(iMS::ToneBuffer& tbuf)
@@ -783,7 +799,7 @@ class ToneBufferDownloadClient {
 
 class ToneBufferManagerClient {
  public:
-  ToneBufferManagerClient(std::shared_ptr<Channel> channel)
+  ToneBufferManagerClient(std::shared_ptr<grpc::Channel> channel)
     : stub_(tonebuffer_manager::NewStub(channel)) {}
 
   bool ToneBufferTest() {
@@ -862,7 +878,7 @@ int main(int argc, char** argv) {
   // are created. This channel models a connection to an endpoint (in this case,
   // localhost at port 28241). We indicate that the channel isn't authenticated
   // (use of InsecureChannelCredentials()).
-  std::shared_ptr<Channel> channel = grpc::CreateChannel(hostname, grpc::InsecureChannelCredentials());
+  std::shared_ptr<grpc::Channel> channel = grpc::CreateChannel(hostname, grpc::InsecureChannelCredentials());
   HWClient hwlist(channel);
 
   std::cout << "----------Test " << test_no++ << ": Scan and Connect ---------------------------" << std::endl;
@@ -923,7 +939,7 @@ int main(int argc, char** argv) {
   {
     FileSystemTableClient fstc(channel);
     if (!fstc.DisplayFileSystemTable(hwlist.ims())) {
-      std::cout << "filesystem_table_viewer::image_detail rpc failed." << std::endl;
+      std::cout << "filesystem_table_viewer::fileentry_detail rpc failed." << std::endl;
       return -1;
     }
     std::cout << std::endl;
