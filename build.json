@@ -1,0 +1,12 @@
+{
+  "Name": "ims_hw_server",
+  "DependsOn": [],
+  "OutputDir": "dist",
+  "Tasks": [
+    {
+      "Name": "Build",
+      "Script": "build.bat",
+      "Args": ["-c","Release","-s","-p","-a","both"]
+    }
+  ]
+}
