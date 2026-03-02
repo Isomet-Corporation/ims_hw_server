@@ -2,6 +2,8 @@
   "Name": "ims_hw_server",
   "DependsOn": [],
   "OutputDir": "dist",
+  "ExportDir": "util/ims_hw_server",
+  "SignFiles": ["bin/Win32/*.exe","bin/x64/*.exe"],
   "Tasks": [
     {
       "Name": "Build",
